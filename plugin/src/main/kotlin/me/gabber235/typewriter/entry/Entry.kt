@@ -31,7 +31,7 @@ interface TriggerableEntry : TriggerEntry {
 	val modifiers: List<Modifier>
 }
 
-enum class CriteriaOperator {
+enum class NumCriteriaOperator {
 	@SerializedName("==")
 	EQUALS,
 
@@ -46,25 +46,52 @@ enum class CriteriaOperator {
 
 	@SerializedName(">=")
 	GREATER_THAN_OR_EQUAL,
+
+	@SerializedName("ANY")
+	ANY
+}
+enum class StrCriteriaOperator {
+	@SerializedName("==")
+	EQUALS,
+
+	@SerializedName("CONTAINS")
+	CONTAINS,
+
+	@SerializedName("CONTAINED BY")
+	CONTAINED_BY,
+
+	@SerializedName("ANY")
+	ANY
 }
 
 data class Criteria(
 	@Help("The fact to check before triggering the entry")
 	@EntryIdentifier(ReadableFactEntry::class)
 	val fact: String = "",
-	@Help("The operator to use when comparing the fact value to the criteria value")
-	val operator: CriteriaOperator = CriteriaOperator.EQUALS,
-	@Help("The value to compare the fact value to")
-	val value: Int = 0,
+	@Help("The operator to use when comparing the fact number value to the criteria number value")
+	val numOperator: NumCriteriaOperator = NumCriteriaOperator.EQUALS,
+	@Help("The value to compare the fact number value to")
+	val numValue: Int = 0,
+	@Help("The operator to use when comparing the fact string value to the criteria string value")
+	val strOperator: StrCriteriaOperator = StrCriteriaOperator.EQUALS,
+	@Help("The value to compare the fact string value to")
+	val strValue: String = "",
 ) {
 	fun isValid(fact: Fact?): Boolean {
-		val value = fact?.value ?: 0
-		return when (operator) {
-			CriteriaOperator.EQUALS                -> value == this.value
-			CriteriaOperator.LESS_THAN             -> value < this.value
-			CriteriaOperator.GREATER_THAN          -> value > this.value
-			CriteriaOperator.LESS_THAN_OR_EQUALS   -> value <= this.value
-			CriteriaOperator.GREATER_THAN_OR_EQUAL -> value >= this.value
+		val numValue = fact?.numValue ?: 0
+		val strValue = fact?.strValue ?: ""
+		return when (numOperator) {
+			NumCriteriaOperator.EQUALS                -> numValue == this.numValue
+			NumCriteriaOperator.LESS_THAN             -> numValue < this.numValue
+			NumCriteriaOperator.GREATER_THAN          -> numValue > this.numValue
+			NumCriteriaOperator.LESS_THAN_OR_EQUALS   -> numValue <= this.numValue
+			NumCriteriaOperator.GREATER_THAN_OR_EQUAL -> numValue >= this.numValue
+			NumCriteriaOperator.ANY                   -> true
+		} && when (strOperator) {
+			StrCriteriaOperator.EQUALS                -> strValue == this.strValue
+			StrCriteriaOperator.CONTAINS              -> strValue.contains(this.strValue,false)
+			StrCriteriaOperator.CONTAINED_BY          -> this.strValue.contains(strValue,false)
+			StrCriteriaOperator.ANY                   -> true
 		}
 	}
 }
@@ -74,15 +101,22 @@ enum class ModifierOperator {
 	SET,
 
 	@SerializedName("+")
-	ADD;
+	ADD,
+
+	@SerializedName("NONE")
+	NONE;
 }
 
 data class Modifier(
 	@Help("The fact to modify when the entry is triggered")
 	@EntryIdentifier(WritableFactEntry::class)
 	val fact: String = "",
-	@Help("The operator to use when modifying the fact value")
-	val operator: ModifierOperator = ModifierOperator.ADD,
-	@Help("The value to modify the fact value by")
-	val value: Int = 0,
+	@Help("The operator to use when modifying the fact number value")
+	val numOperator: ModifierOperator = ModifierOperator.ADD,
+	@Help("The value to modify the fact number value by")
+	val numValue: Int = 0,
+	@Help("The operator to use when modifying the fact string value")
+	val strOperator: ModifierOperator = ModifierOperator.ADD,
+	@Help("The value to modify the fact string value by")
+	val strValue: String = "",
 )

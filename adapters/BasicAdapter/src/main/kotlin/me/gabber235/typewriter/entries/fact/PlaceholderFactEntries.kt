@@ -17,7 +17,7 @@ import java.util.*
 /**
  * A [fact](/docs/facts) that is computed from a placeholder.
  * This placeholder is evaluated when the fact is read and must return a number or boolean.
- *
+ * (the value is also stored in the string value of the fact)
  * <fields.ReadonlyFactInfo />
  *
  * ## How could this be used?
@@ -30,13 +30,13 @@ class NumberPlaceholderFactEntry(
     override val name: String = "",
     override val comment: String = "",
     @Placeholder
-    @Help("Placeholder to parse (e.g. %player_level%) - Only placeholders that return a number or boolean are supported!")
+    @Help("Placeholder to parse (e.g. %player_level%) - Only placeholders that return a number or boolean are supported (the value is also stored in the string value of the fact)!")
     /**
      * The placeholder to parse.
      * For example %player_level%.
      *
      * <Admonition type="caution">
-     *      Only placeholders that return a number or boolean are supported!
+     *      Only placeholders that return a number or boolean are supported (the value is also stored in the string value of the fact)!
      *      If you want to use a placeholder that returns a string,
      *      use the <Link to='value_placeholder'>ValuePlaceholderFactEntry</Link> instead.
      * </Admonition>
@@ -46,10 +46,10 @@ class NumberPlaceholderFactEntry(
     override fun read(playerId: UUID): Fact {
         if (!placeholder.isPlaceholder) {
             logger.warning("Placeholder '$placeholder' is not a valid placeholder! Make sure it is only a placeholder starting & ending with %")
-            return Fact(id, 0)
+            return Fact(id, 0, "")
         }
         val value = placeholder.parsePlaceholders(playerId)
-        return Fact(id, value.toIntOrNull() ?: value.toBooleanStrictOrNull()?.toInt() ?: 0)
+        return Fact(id, value.toIntOrNull() ?: value.toBooleanStrictOrNull()?.toInt() ?: 0, value)
     }
 }
 
@@ -60,6 +60,7 @@ fun Boolean.toInt() = if (this) 1 else 0
  * A [fact](/docs/facts) that is computed from a placeholder.
  * This placeholder is evaluated when the fact is read and can return anything.
  * The value will be computed based on the `values` specified.
+ * (the value is also stored in the string value of the fact)
  * <fields.ReadonlyFactInfo/>
  *
  * ## How could this be used?
@@ -78,7 +79,7 @@ class ValuePlaceholderFactEntry(
     @Help("Values to match the placeholder with and their corresponding fact value. Regex is supported.")
     /**
      * The values to match the placeholder with and their corresponding fact value.
-     *
+     * (the value is also stored in the string value of the fact)
      * An example would be:
      * ```yaml
      * values:
@@ -96,10 +97,10 @@ class ValuePlaceholderFactEntry(
     override fun read(playerId: UUID): Fact {
         if (!placeholder.isPlaceholder) {
             logger.warning("Placeholder '$placeholder' is not a valid placeholder! Make sure it is only a placeholder starting & ending with %")
-            return Fact(id, 0)
+            return Fact(id, 0,"")
         }
         val parsed = placeholder.parsePlaceholders(playerId)
         val value = values[parsed] ?: values.entries.firstOrNull { it.key.toRegex().matches(parsed) }?.value ?: 0
-        return Fact(id, value)
+        return Fact(id, value,parsed)
     }
 }

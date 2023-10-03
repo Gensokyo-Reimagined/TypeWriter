@@ -125,7 +125,7 @@ class FactDatabase : KoinComponent {
     internal fun setCachedFact(playerId: UUID, fact: Fact) {
         cache.compute(playerId) { _, facts ->
             val newFacts = facts?.filter { it.id != fact.id }?.toSet() ?: emptySet()
-            if (fact.value == 0) return@compute newFacts
+            if (fact.numValue == 0 && fact.strValue == "") return@compute newFacts
             newFacts + fact
         }
         if (playerId in flush) return
@@ -141,21 +141,37 @@ class FactDatabase : KoinComponent {
     fun modify(playerId: UUID, modifiers: List<Modifier>) {
         modify(playerId) {
             modifiers.forEach { modifier ->
-                modify(modifier.fact) {
-                    when (modifier.operator) {
-                        ModifierOperator.ADD -> it + modifier.value
-                        ModifierOperator.SET -> modifier.value
+
+                modifyNum(modifier.fact) {
+                    when (modifier.numOperator) {
+                        ModifierOperator.ADD -> it + modifier.numValue
+                        ModifierOperator.SET -> modifier.numValue
+                        ModifierOperator.NONE -> it
                     }
                 }
+
+                modifyStr(modifier.fact) {
+                    when (modifier.strOperator) {
+                        ModifierOperator.ADD -> it + modifier.strValue
+                        ModifierOperator.SET -> modifier.strValue
+                        ModifierOperator.NONE -> it
+                    }
+                }
+
             }
         }
     }
 
     fun modify(playerId: UUID, modifier: FactsModifier.() -> Unit) {
-        val modifications = FactsModifier(playerId).apply(modifier).build()
-        if (modifications.isEmpty()) return
+        val numModifications = FactsModifier(playerId).apply(modifier).buildNum()
+        val strModifications = FactsModifier(playerId).apply(modifier).buildStr()
+        if (numModifications.isEmpty() && strModifications.isEmpty()) return
 
-        val hasPersistentFact = modifications.map { (id, value) ->
+        val hasPersistentFact = numModifications.map { (id, value) ->
+            val entry = Query.findById<WritableFactEntry>(id) ?: return@map false
+            entry.write(playerId, value)
+            entry is PersistableFactEntry
+        }.any() && strModifications.map { (id, value) ->
             val entry = Query.findById<WritableFactEntry>(id) ?: return@map false
             entry.write(playerId, value)
             entry is PersistableFactEntry
@@ -169,21 +185,33 @@ class FactDatabase : KoinComponent {
 
 class FactsModifier(private val uuid: UUID) {
 
-    private val modifications = mutableMapOf<String, Int>()
+    private val numModifications = mutableMapOf<String, Int>()
+    private val strModifications = mutableMapOf<String, String>()
 
-    fun modify(id: String, modifier: (Int) -> Int) {
-        val oldValue = modifications[id] ?: get<FactDatabase>(FactDatabase::class.java).getFact(
+    fun modifyNum(id: String, modifier: (Int) -> Int) {
+        val oldValue = numModifications[id] ?: get<FactDatabase>(FactDatabase::class.java).getFact(
             uuid,
             id
-        )?.value?.logErrorIfNull("Could not read fact: $id. Please report! Using 0 as default value.") ?: 0
-        modifications[id] = modifier(oldValue)
+        )?.numValue?.logErrorIfNull("Could not read fact: $id. Please report! Using 0 as default value.") ?: 0
+        numModifications[id] = modifier(oldValue)
+    }
+    fun modifyStr(id: String, modifier: (String) -> String) {
+        val oldValue = strModifications[id] ?: get<FactDatabase>(FactDatabase::class.java).getFact(
+            uuid,
+            id
+        )?.strValue?.logErrorIfNull("Could not read fact: $id. Please report! Using \"\" as default value.") ?: ""
+        strModifications[id] = modifier(oldValue)
     }
 
     fun set(id: String, value: Int) {
-        modifications[id] = value
+        numModifications[id] = value
+    }
+    fun set(id: String, value: String) {
+        strModifications[id] = value
     }
 
-    fun build(): Map<String, Int> = modifications
+    fun buildNum(): Map<String, Int> = numModifications
+    fun buildStr(): Map<String, String> = strModifications
 }
 
 fun Player.fact(id: String) = get<FactDatabase>(FactDatabase::class.java).getFact(uniqueId, id)

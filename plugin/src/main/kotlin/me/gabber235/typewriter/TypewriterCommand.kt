@@ -83,7 +83,7 @@ private fun LiteralDSLBuilder.factsCommands() {
                                 Regex(" +"),
                                 " "
                             )
-                        }\n\n<gray><i>Click to modify'><click:suggest_command:'/tw facts $name set ${entry.name} ${fact.value}'><gray> - </gray><blue>${entry.formattedName}:</blue> ${fact.value} <gray><i>(${
+                        }\n\n<gray><i>Click to modify'><click:suggest_command:'/tw facts $name set ${entry.name} ${fact.numValue} ${fact.strValue}'><gray> - </gray><blue>${entry.formattedName}:</blue> ${fact.numValue} ${fact.strValue}<gray><i>(${
                             formatter.format(
                                 fact.lastUpdate
                             )

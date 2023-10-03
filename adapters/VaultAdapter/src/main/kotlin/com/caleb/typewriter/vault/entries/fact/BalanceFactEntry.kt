@@ -25,8 +25,8 @@ class BalanceFactEntry(
     override val comment: String = "",
 ) : ReadableFactEntry {
     override fun read(playerId: UUID): Fact {
-        val permissionHandler = VaultAdapter.economy ?: return Fact(id, 0)
+        val permissionHandler = VaultAdapter.economy ?: return Fact(id, 0, "")
         val balance = permissionHandler.getBalance(server.getOfflinePlayer(playerId))
-        return Fact(id, balance.toInt())
+        return Fact(id, balance.toInt(), "")
     }
 }

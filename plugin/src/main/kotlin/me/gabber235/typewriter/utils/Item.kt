@@ -1,12 +1,10 @@
 package me.gabber235.typewriter.utils
 
-import lirand.api.extensions.inventory.ItemStack
 import lirand.api.extensions.inventory.meta
 import lirand.api.nbt.NbtData
 import lirand.api.nbt.tagNbtData
 import me.gabber235.typewriter.adapters.modifiers.*
 import me.gabber235.typewriter.extensions.placeholderapi.parsePlaceholders
-import me.gabber235.typewriter.utils.Item.Empty.lore
 import org.bukkit.Material
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemFlag

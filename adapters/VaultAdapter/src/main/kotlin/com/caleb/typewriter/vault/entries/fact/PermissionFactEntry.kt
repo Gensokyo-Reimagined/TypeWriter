@@ -29,9 +29,9 @@ class PermissionFactEntry(
     val permission: String = ""
 ) : ReadableFactEntry {
     override fun read(playerId: UUID): Fact {
-        val permissionHandler: Permission = VaultAdapter.permissions ?: return Fact(id, 0)
-        val player = server.getPlayer(playerId) ?: return Fact(id, 0)
+        val permissionHandler: Permission = VaultAdapter.permissions ?: return Fact(id, 0, "")
+        val player = server.getPlayer(playerId) ?: return Fact(id, 0, "")
         val value = if (permissionHandler.playerHas(player, permission)) 1 else 0
-        return Fact(id, value)
+        return Fact(id, value, "")
     }
 }

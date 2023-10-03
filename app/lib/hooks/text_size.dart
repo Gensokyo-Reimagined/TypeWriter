@@ -20,7 +20,7 @@ Size useTextSize(BuildContext context, String text, [TextStyle? style]) {
                   DefaultTextStyle.of(context).style,
         ),
         maxLines: 1,
-        textScaler: MediaQuery.of(context).textScaler,
+        // textScaler: MediaQuery.of(context).textScaler,
         textDirection: TextDirection.ltr,
       )..layout(minWidth: 0, maxWidth: double.infinity);
 

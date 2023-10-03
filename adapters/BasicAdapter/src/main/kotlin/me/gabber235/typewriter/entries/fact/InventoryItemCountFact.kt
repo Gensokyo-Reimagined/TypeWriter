@@ -50,8 +50,8 @@ class InventoryItemCountFact(
     }
 
     override fun read(playerId: UUID): Fact {
-        val player = server.getPlayer(playerId) ?: return Fact(id, 0)
+        val player = server.getPlayer(playerId) ?: return Fact(id, 0,"")
         val amount = player.inventory.contents.filterNotNull().filter { isValid(it) }.sumOf { it.amount }
-        return Fact(id, amount)
+        return Fact(id, amount,"")
     }
 }

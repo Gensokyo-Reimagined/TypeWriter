@@ -33,7 +33,7 @@ class MobCountFact(
 ) : ReadableFactEntry {
     override fun read(playerId: UUID): Fact {
         val mob = MythicBukkit.inst().mobManager.getMythicMob(mobName)
-        if (!mob.isPresent) return Fact(id, 0)
+        if (!mob.isPresent) return Fact(id, 0, "")
 
         var count = 0
         for (activeMob in MythicBukkit.inst().mobManager.activeMobs) {
@@ -42,6 +42,6 @@ class MobCountFact(
             }
         }
 
-        return Fact(id, count)
+        return Fact(id, count, "")
     }
 }

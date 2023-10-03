@@ -52,8 +52,8 @@ class IslandFactEntry(
 ) : ReadableFactEntry {
     override fun read(playerId: UUID): Fact {
         val sPlayer = SuperiorSkyblockAPI.getPlayer(playerId)
-        val island = sPlayer.island ?: return Fact(id, -1)
+        val island = sPlayer.island ?: return Fact(id, -1, "")
         val value = fact.getFact(sPlayer, island)
-        return Fact(id, value)
+        return Fact(id, value, "")
     }
 }

@@ -16,5 +16,5 @@ import me.gabber235.typewriter.utils.Icons
 class PermanentFactEntry(
     override val id: String = "",
     override val name: String = "",
-    override val comment: String = "",
+    override val comment: String = ""
 ) : PersistableFactEntry

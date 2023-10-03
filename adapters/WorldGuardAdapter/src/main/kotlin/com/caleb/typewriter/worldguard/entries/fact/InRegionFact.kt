@@ -29,13 +29,13 @@ class InRegionFact(
     val region: String = "",
 ) : ReadableFactEntry {
     override fun read(playerId: UUID): Fact {
-        val player = server.getPlayer(playerId) ?: return Fact(id, 0)
+        val player = server.getPlayer(playerId) ?: return Fact(id, 0, "")
         val regionContainer = WorldGuard.getInstance().platform.regionContainer
         val regionManager = regionContainer.get(BukkitAdapter.adapt(player.world))
         val regions = regionManager?.getApplicableRegions(BukkitAdapter.asBlockVector(player.location))
-            ?: return Fact(id, 0)
+            ?: return Fact(id, 0, "")
 
         val value = if (regions.regions.any { it.id == region }) 1 else 0
-        return Fact(id, value)
+        return Fact(id, value, "")
     }
 }

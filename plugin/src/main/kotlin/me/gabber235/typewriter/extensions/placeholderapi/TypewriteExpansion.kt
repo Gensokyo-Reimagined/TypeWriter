@@ -33,7 +33,10 @@ object TypewriteExpansion : PlaceholderExpansion(), KoinComponent {
 
         if (player == null) return null
         val factEntry = Query.findByName<ReadableFactEntry>(params) ?: return null
-        return "${factEntry.read(player.uniqueId).value}"
+        val fact = factEntry.read(player.uniqueId)
+
+        if(fact.strValue!="") return fact.strValue
+        return "${fact.numValue}"
     }
 }
 

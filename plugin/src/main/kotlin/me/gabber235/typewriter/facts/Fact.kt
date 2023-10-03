@@ -11,7 +11,7 @@ val FactEntry.formattedName: String
         .split("_")
         .joinToString(" ") { part -> part.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() } }
 
-data class Fact(val id: String, val value: Int, val lastUpdate: LocalDateTime = LocalDateTime.now()) {
+data class Fact(val id: String, val numValue: Int, val strValue: String, val lastUpdate: LocalDateTime = LocalDateTime.now()) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is Fact) return false

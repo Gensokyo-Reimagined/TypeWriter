@@ -25,10 +25,10 @@ class CombatFactEntry(
     override val comment: String = "",
 ) : ReadableFactEntry {
     override fun read(playerId: UUID): Fact {
-        val combatLogger = CombatLogXAdapter.getAPI() ?: return Fact(id, 0)
-        val player = server.getPlayer(playerId) ?: return Fact(id, 0)
+        val combatLogger = CombatLogXAdapter.getAPI() ?: return Fact(id, 0, "")
+        val player = server.getPlayer(playerId) ?: return Fact(id, 0, "")
         val value = if (combatLogger.combatManager.isInCombat(player)) 1 else 0
 
-        return Fact(id, value)
+        return Fact(id, value, "")
     }
 }
