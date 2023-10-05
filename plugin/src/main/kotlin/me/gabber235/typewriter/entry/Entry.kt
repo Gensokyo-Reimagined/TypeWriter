@@ -97,14 +97,14 @@ data class Criteria(
 }
 
 enum class ModifierOperator {
+	@SerializedName("NONE")
+	NONE,
+
 	@SerializedName("=")
 	SET,
 
 	@SerializedName("+")
-	ADD,
-
-	@SerializedName("NONE")
-	NONE;
+	ADD;
 }
 
 data class Modifier(
