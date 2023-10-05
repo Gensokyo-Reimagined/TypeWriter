@@ -51,6 +51,9 @@ enum class NumCriteriaOperator {
 	ANY
 }
 enum class StrCriteriaOperator {
+	@SerializedName("ANY")
+	ANY,
+
 	@SerializedName("==")
 	EQUALS,
 
@@ -58,10 +61,7 @@ enum class StrCriteriaOperator {
 	CONTAINS,
 
 	@SerializedName("CONTAINED BY")
-	CONTAINED_BY,
-
-	@SerializedName("ANY")
-	ANY
+	CONTAINED_BY
 }
 
 data class Criteria(
@@ -97,14 +97,14 @@ data class Criteria(
 }
 
 enum class ModifierOperator {
+	@SerializedName("NONE")
+	NONE,
+
 	@SerializedName("=")
 	SET,
 
 	@SerializedName("+")
-	ADD,
-
-	@SerializedName("NONE")
-	NONE;
+	ADD;
 }
 
 data class Modifier(
