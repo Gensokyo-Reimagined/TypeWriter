@@ -57,7 +57,7 @@ class StringEditor extends HookConsumerWidget {
         icon: icon,
         hintText: hint.isNotEmpty ? hint : "Enter a ${field.type.name}",
         text: forcedValue ?? value,
-        singleLine: singleLine,
+        singleLine: false,
         keyboardType: singleLine ? TextInputType.text : TextInputType.multiline,
         inputFormatters: [
           if (field.hasModifier("snake_case")) snakeCaseFormatter(),
