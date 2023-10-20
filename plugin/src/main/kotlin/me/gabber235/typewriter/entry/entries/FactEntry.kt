@@ -6,7 +6,6 @@ import me.gabber235.typewriter.adapters.modifiers.MultiLine
 import me.gabber235.typewriter.entry.StaticEntry
 import me.gabber235.typewriter.facts.Fact
 import me.gabber235.typewriter.facts.FactDatabase
-import org.bukkit.inventory.ItemStack
 import org.koin.java.KoinJavaComponent.get
 import java.util.*
 
@@ -62,9 +61,4 @@ interface PersistableFactEntry : CachableFactEntry {
 @Tags("expirable-fact")
 interface ExpirableFactEntry : CachableFactEntry {
     fun hasExpired(fact: Fact): Boolean = false
-}
-@Tags("iconed-fact")
-interface IconableFactEntry : FactEntry {
-    @Help("An ItemStack icon to represent this fact to players")
-    val icon: ItemStack
 }
