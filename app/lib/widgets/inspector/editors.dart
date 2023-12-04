@@ -17,7 +17,8 @@ import "package:typewriter/widgets/inspector/editors/object.dart";
 import "package:typewriter/widgets/inspector/editors/optional.dart";
 import "package:typewriter/widgets/inspector/editors/page_selector.dart";
 import "package:typewriter/widgets/inspector/editors/potion_effect.dart";
-import "package:typewriter/widgets/inspector/editors/sound.dart";
+import "package:typewriter/widgets/inspector/editors/sound_id.dart";
+import "package:typewriter/widgets/inspector/editors/sound_source.dart";
 import "package:typewriter/widgets/inspector/editors/string.dart";
 import "package:typewriter/widgets/inspector/inspector.dart";
 
@@ -33,7 +34,6 @@ dynamic fieldValue(FieldValueRef ref, String path, [dynamic defaultValue]) {
 List<EditorFilter> editorFilters(EditorFiltersRef ref) => [
       // Modifier Editors
       EntrySelectorEditorFilter(),
-      SoundSelectorEditorFilter(),
       PageSelectorEditorFilter(),
 
       // Custom Editors
@@ -44,6 +44,8 @@ List<EditorFilter> editorFilters(EditorFiltersRef ref) => [
       CronEditorFilter(),
       PotionEffectEditorFilter(),
       ItemEditorFilter(),
+      SoundIdEditorFilter(),
+      SoundSourceEditorFilter(),
 
       // Default filters
       StringEditorFilter(),

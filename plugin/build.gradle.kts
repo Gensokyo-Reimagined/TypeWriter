@@ -39,9 +39,11 @@ dependencies {
     implementation("com.github.dyam0:LirandAPI:96cc59d4fb")
 
     // Doesn't want to load properly using the spigot api.
-    implementation("io.ktor:ktor-server-core-jvm:2.3.4")
-    implementation("io.ktor:ktor-server-netty-jvm:2.3.4")
+    implementation("io.ktor:ktor-server-core-jvm:2.3.6")
+    implementation("io.ktor:ktor-server-netty-jvm:2.3.6")
     implementation("io.insert-koin:koin-core:3.4.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.6.0")
+    implementation("org.bstats:bstats-bukkit:3.0.2")
 
     compileOnly("com.github.shynixn.mccoroutine:mccoroutine-bukkit-api:2.11.0")
     compileOnly("com.github.shynixn.mccoroutine:mccoroutine-bukkit-core:2.11.0")
@@ -82,6 +84,10 @@ tasks.processResources {
     }
 }
 
+tasks.withType<ShadowJar> {
+    relocate("org.bstats", "${project.group}.${project.name}.extensions.bstats")
+}
+
 task<ShadowJar>("buildAndMove") {
     dependsOn("shadowJar")
 
@@ -120,5 +126,6 @@ task<ShadowJar>("buildRelease") {
         // Rename the jar to remove the version and -all
         val jar = file("build/libs/%s-%s-all.jar".format(project.name, project.version))
         jar.renameTo(file("build/libs/%s.jar".format(project.name)))
+        file("build/libs/%s-%s.jar".format(project.name, project.version)).delete()
     }
 }

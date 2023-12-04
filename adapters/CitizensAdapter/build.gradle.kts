@@ -37,7 +37,7 @@ dependencies {
     compileOnly("io.insert-koin:koin-core:3.4.0")
 
     // External dependencies
-    compileOnly("net.citizensnpcs:citizens-main:2.0.32-SNAPSHOT") {
+    compileOnly("net.citizensnpcs:citizens-main:2.0.33-SNAPSHOT") {
         exclude(group = "*", module = "*")
     }
 
@@ -93,5 +93,6 @@ task<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("buildRelease")
         // Rename the jar to remove the version and -all
         val jar = file("build/libs/%s-%s-all.jar".format(project.name, project.version))
         jar.renameTo(file("build/libs/%s.jar".format(project.name)))
+        file("build/libs/%s-%s.jar".format(project.name, project.version)).delete()
     }
 }
