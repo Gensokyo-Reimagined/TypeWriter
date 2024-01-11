@@ -4,15 +4,18 @@ import org.jetbrains.kotlin.util.capitalizeDecapitalize.capitalizeAsciiOnly
 plugins {
     id("java")
     kotlin("jvm") version "1.8.20"
+    `maven-publish`
     id("com.github.johnrengelman.shadow") version "8.1.1"
 }
 
-group = "me.gabber235"
-version = file("../version.txt").readText().trim()
+group = "com.github.gabber235"
+val versionFile = if (file("version.txt").exists()) file("version.txt") else file("../version.txt")
+version = versionFile.readText().trim()
 
 repositories {
     mavenCentral()
     maven("https://jitpack.io")
+    // ProtocolLib
     maven("https://repo.dmulloy2.net/repository/public/")
     maven("https://hub.spigotmc.org/nexus/content/repositories/snapshots/")
     maven("https://oss.sonatype.org/content/groups/public/")
@@ -34,7 +37,7 @@ dependencies {
     for (dependency in centralDependencies) {
         compileOnly(dependency)
     }
-    compileOnly("io.papermc.paper:paper-api:1.20.1-R0.1-SNAPSHOT")
+    compileOnly("io.papermc.paper:paper-api:1.20.4-R0.1-SNAPSHOT")
 
     implementation("com.github.dyam0:LirandAPI:96cc59d4fb")
 
@@ -55,7 +58,7 @@ dependencies {
     compileOnly("com.mojang:brigadier:1.0.18")
     compileOnly("me.clip:placeholderapi:2.11.3")
     compileOnly("com.google.code.gson:gson:2.10.1")
-    compileOnly("com.comphenix.protocol:ProtocolLib:5.0.0-SNAPSHOT")
+    compileOnly("com.comphenix.protocol:ProtocolLib:5.1.0")
     compileOnly("org.geysermc.floodgate:api:2.2.0-SNAPSHOT")
 
     testImplementation("org.junit.jupiter:junit-jupiter:5.9.0")

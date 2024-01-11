@@ -10,6 +10,7 @@ import "package:typewriter/models/entry.dart";
 import "package:typewriter/utils/extensions.dart";
 import "package:typewriter/utils/passing_reference.dart";
 import "package:typewriter/utils/popups.dart";
+import "package:typewriter/widgets/components/app/entries_graph.dart";
 import "package:typewriter/widgets/components/app/entry_search.dart";
 import "package:typewriter/widgets/components/app/search_bar.dart";
 import "package:typewriter/widgets/inspector/inspector.dart";
@@ -317,14 +318,26 @@ extension PageX on Page {
     return entry;
   }
 
-  Future<void> _wireEntryToOtherEntry(
+  /// Will connects a triggerable entry to a trigger entry.
+  /// If it is already connected, it will remove the connection.
+  Future<void> wireEntryToOtherEntry(
     PassingRef ref,
     Entry originalEntry,
     Entry newEntry,
   ) async {
     final currentTriggers = originalEntry.get("triggers");
     if (currentTriggers == null || currentTriggers is! List) return;
-    final newTriggers = currentTriggers + [newEntry.id];
+
+    final currentTriggersIds = currentTriggers.cast<String>();
+    final List<String> newTriggers;
+
+    if (currentTriggers.contains(newEntry.id)) {
+      newTriggers =
+          currentTriggersIds.where((id) => id != newEntry.id).toList();
+    } else {
+      newTriggers = currentTriggersIds + [newEntry.id];
+    }
+
     final modifiedOriginalEntry =
         originalEntry.copyWith("triggers", newTriggers);
     await updateEntireEntry(ref, modifiedOriginalEntry);
@@ -333,11 +346,13 @@ extension PageX on Page {
   Future<void> extendsWithDuplicate(PassingRef ref, String entryId) async {
     final entry = ref.read(entryProvider(pageName, entryId));
     if (entry == null) return;
-    final triggerPaths = ref.read(modifierPathsProvider(entry.type, "trigger"));
-    if (!triggerPaths.contains("triggers.*")) {
-      debugPrint("Cannot duplicate entry with no triggers.*");
+    final isTrigger = ref.read(isTriggerEntryProvider(entryId));
+    if (!isTrigger) {
+      debugPrint("Cannot extend a non-trigger entry.");
       return;
     }
+
+    final triggerPaths = ref.read(modifierPathsProvider(entry.type, "trigger"));
 
     final newEntry = triggerPaths
         .fold(
@@ -350,15 +365,15 @@ extension PageX on Page {
         .copyWith("name", entry.name.incrementedName);
     await createEntry(ref, newEntry);
 
-    await _wireEntryToOtherEntry(ref, entry, newEntry);
+    await wireEntryToOtherEntry(ref, entry, newEntry);
   }
 
   void extendsWith(PassingRef ref, String entryId) {
     final entry = ref.read(entryProvider(pageName, entryId));
     if (entry == null) return;
-    final triggerPaths = ref.read(modifierPathsProvider(entry.type, "trigger"));
-    if (!triggerPaths.contains("triggers.*")) {
-      debugPrint("Cannot extend entry with no triggers.*");
+    final isTrigger = ref.read(isTriggerEntryProvider(entryId));
+    if (!isTrigger) {
+      debugPrint("Cannot extend a non-trigger entry.");
       return;
     }
 
@@ -367,7 +382,7 @@ extension PageX on Page {
       ..fetchNewEntry(
         onAdd: (blueprint) async {
           final newEntry = await createEntryFromBlueprint(ref, blueprint);
-          await _wireEntryToOtherEntry(ref, entry, newEntry);
+          await wireEntryToOtherEntry(ref, entry, newEntry);
           await ref
               .read(inspectingEntryIdProvider.notifier)
               .navigateAndSelectEntry(ref, newEntry.id);
@@ -376,7 +391,7 @@ extension PageX on Page {
       )
       ..fetchEntry(
         onSelect: (selectedEntry) async {
-          await _wireEntryToOtherEntry(ref, entry, selectedEntry);
+          await wireEntryToOtherEntry(ref, entry, selectedEntry);
           return null;
         },
       )

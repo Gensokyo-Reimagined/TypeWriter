@@ -7,7 +7,10 @@ import com.google.gson.stream.JsonReader
 import lirand.api.extensions.events.listen
 import me.gabber235.typewriter.adapters.AdapterLoader
 import me.gabber235.typewriter.adapters.customEditors
-import me.gabber235.typewriter.entry.entries.*
+import me.gabber235.typewriter.entry.entries.CustomCommandEntry
+import me.gabber235.typewriter.entry.entries.EventEntry
+import me.gabber235.typewriter.entry.entries.FactEntry
+import me.gabber235.typewriter.entry.entries.ReadableFactEntry
 import me.gabber235.typewriter.events.PublishedBookEvent
 import me.gabber235.typewriter.events.TypewriterReloadEvent
 import me.gabber235.typewriter.logger
@@ -86,7 +89,7 @@ class EntryDatabaseImpl : EntryDatabase, KoinComponent {
         return dir.pages().mapNotNull { file ->
             val id = file.nameWithoutExtension
             val dialogueReader = JsonReader(file.reader())
-            dialogueReader.parsePage(id, gson)
+            dialogueReader.parsePage(id, gson).getOrNull()
         }
     }
 
@@ -114,9 +117,8 @@ class EntryDatabaseImpl : EntryDatabase, KoinComponent {
     }
 }
 
-fun JsonReader.parsePage(id: String, gson: Gson): Page? {
+fun JsonReader.parsePage(id: String, gson: Gson): Result<Page> {
     return try {
-
         var page = Page(id)
 
         beginObject()
@@ -128,10 +130,12 @@ fun JsonReader.parsePage(id: String, gson: Gson): Page? {
             }
         }
 
-        page
+        endObject()
+
+        Result.success(page)
     } catch (e: Exception) {
         logger.warning("Failed to parse page: ${e.message}")
-        null
+        Result.failure(e)
     }
 }
 
@@ -167,7 +171,7 @@ private fun JsonReader.parseEntry(gson: Gson): Entry? {
         )
         null
     } catch (e: Exception) {
-        logger.warning("Failed to parse entry: ${e.message}")
+        logger.warning("Failed to parse entry: ${e.message} (${this})")
         null
     }
 }

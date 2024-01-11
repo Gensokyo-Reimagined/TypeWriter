@@ -15,10 +15,12 @@ import me.gabber235.typewriter.extensions.protocollib.BoatType
 import me.gabber235.typewriter.extensions.protocollib.ClientEntity
 import me.gabber235.typewriter.extensions.protocollib.spectateEntity
 import me.gabber235.typewriter.extensions.protocollib.stopSpectatingEntity
+import me.gabber235.typewriter.logger
 import me.gabber235.typewriter.plugin
 import me.gabber235.typewriter.utils.*
 import me.gabber235.typewriter.utils.GenericPlayerStateProvider.*
 import org.bukkit.Location
+import org.bukkit.Particle
 import org.bukkit.entity.EntityType
 import org.bukkit.entity.Player
 import org.bukkit.potion.PotionEffect
@@ -47,13 +49,20 @@ class CameraCinematicEntry(
     @InnerMin(Min(10))
     val segments: List<CameraSegment> = emptyList(),
 ) : CinematicEntry {
-    override fun shouldSimulate(): Boolean = false
     override fun create(player: Player): CinematicAction {
         return CameraCinematicAction(
             player,
             this,
         )
     }
+
+    override fun createSimulated(player: Player): CinematicAction {
+        return SimulatedCameraCinematicAction(
+            player,
+            this,
+        )
+    }
+
 }
 
 data class CameraSegment(
@@ -79,7 +88,11 @@ class CameraCinematicAction(
     override suspend fun setup() {
         super.setup()
 
-        segments = entry.segments.map { segment ->
+        segments = entry.segments.mapNotNull { segment ->
+            if (segment.path.isEmpty()) {
+                logger.warning("Camera segment has no path in ${entry.id}, skipping.")
+                return@mapNotNull null
+            }
             if (player.isFloodgate) {
                 TeleportCameraSegmentAction(player, segment)
             } else {
@@ -325,6 +338,25 @@ private class TeleportCameraSegmentAction(
 
     override fun teardown() {
     }
+}
+
+class SimulatedCameraCinematicAction(
+    private val player: Player,
+    private val entry: CameraCinematicEntry,
+) : CinematicAction {
+
+    override suspend fun tick(frame: Int) {
+        super.tick(frame)
+
+        val segment = (entry.segments activeSegmentAt frame) ?: return
+        val percentage = segment.percentageAt(frame)
+        val location = segment.path.interpolate(percentage)
+
+        // Display a particle at the location
+        player.spawnParticle(Particle.SCRAPE, location, 1)
+    }
+
+    override fun canFinish(frame: Int): Boolean = entry.segments canFinishAt frame
 }
 
 /**

@@ -6,7 +6,6 @@ import me.gabber235.typewriter.entry.dialogue.DialogueSequence
 import me.gabber235.typewriter.entry.entries.*
 import me.gabber235.typewriter.entry.entries.SystemTrigger.*
 import me.gabber235.typewriter.entry.matches
-import me.gabber235.typewriter.entry.triggerEntriesFor
 import me.gabber235.typewriter.entry.triggerFor
 import org.bukkit.entity.Player
 import org.koin.core.component.KoinComponent
@@ -56,7 +55,7 @@ class Interaction(val player: Player) : KoinComponent {
         }
     }
 
-    private fun handleDialogue(event: Event) {
+    private suspend fun handleDialogue(event: Event) {
         if (DIALOGUE_END in event) {
             val dialogue = dialogue ?: return
             this.dialogue = null
@@ -103,13 +102,17 @@ class Interaction(val player: Player) : KoinComponent {
      * Called when the player clicks the next button. If there is no next dialogue, the sequence
      * will be ended.
      */
-    private fun onDialogueNext() {
+    private suspend fun onDialogueNext() {
         val dialog = dialogue ?: return
+        dialog.isActive = false
         if (dialog.triggers.isEmpty()) {
-            DIALOGUE_END triggerFor player
+            // We need to immediately end the dialogue, otherwise it may be triggered again
+            onEvent(Event(player, listOf(DIALOGUE_END)))
             return
         }
-        dialog.triggers triggerEntriesFor player
+
+        // We need to immediately end the dialogue, otherwise it may be triggered again
+        onEvent(Event(player, dialog.triggers.map(::EntryTrigger)))
         return
     }
 
@@ -132,21 +135,23 @@ class Interaction(val player: Player) : KoinComponent {
         this.cinematic = null
         cinematic?.end()
 
-        var entries =
+        val entries =
             Query.findWhereFromPage<CinematicEntry>(trigger.pageId) {
                 it.criteria.matches(event.player.uniqueId)
                         && it.id !in trigger.ignoreEntries
             }
 
-        // If the cinematic is a simulation, we filter out all the entries that should never be
-        // simulated.
-        if (trigger.simulate) {
-            entries = entries.filter { it.shouldSimulate() }
-        }
-
         if (entries.isEmpty() && !trigger.simulate) return
 
-        this.cinematic = CinematicSequence(player, entries, trigger.triggers, trigger.minEndTime)
+        val actions = entries.mapNotNull {
+            if (trigger.simulate) {
+                it.createSimulated(player)
+            } else {
+                it.create(player)
+            }
+        }
+
+        this.cinematic = CinematicSequence(player, actions, trigger.triggers, trigger.minEndTime)
     }
 
     suspend fun end() {

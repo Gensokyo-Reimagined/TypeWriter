@@ -7,6 +7,7 @@ import me.gabber235.typewriter.entries.dialogue.OptionDialogueEntry
 import me.gabber235.typewriter.entry.Modifier
 import me.gabber235.typewriter.entry.dialogue.DialogueMessenger
 import me.gabber235.typewriter.entry.dialogue.MessengerState
+import me.gabber235.typewriter.entry.dialogue.confirmationKey
 import me.gabber235.typewriter.entry.entries.DialogueEntry
 import me.gabber235.typewriter.entry.matches
 import me.gabber235.typewriter.extensions.placeholderapi.parsePlaceholders
@@ -19,7 +20,6 @@ import net.kyori.adventure.text.JoinConfiguration
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder
 import org.bukkit.entity.Player
 import org.bukkit.event.player.PlayerItemHeldEvent
-import org.bukkit.event.player.PlayerSwapHandItemsEvent
 import kotlin.math.max
 import kotlin.math.min
 
@@ -29,7 +29,7 @@ val optionFormat: String by snippet(
 			|<white> <speaker><reset>: <text>
 			|
 			|<options>
-			|<#5d6c78>[ <grey><white>Scroll</white> to change option and press<white> <key:key.swapOffhand> </white>to select <#5d6c78>]</#5d6c78>
+			|<#5d6c78>[ <grey><white>Scroll</white> to change option and press<white> <confirmation_key> </white>to select <#5d6c78>]</#5d6c78>
 			|<gray><st>${" ".repeat(60)}</st>
 		""".trimMargin()
 )
@@ -71,14 +71,16 @@ class JavaOptionDialogueDialogueMessenger(player: Player, entry: OptionDialogueE
     override fun init() {
         super.init()
         usableOptions =
-            entry.options.filter { it.criteria.matches(player.uniqueId) }.sortedByDescending { it.criteria.size }
+            entry.options.filter { it.criteria.matches(player.uniqueId) }
 
         speakerDisplayName = entry.speakerDisplayName
 
-        listen<PlayerSwapHandItemsEvent> { event ->
-            if (event.player.uniqueId != player.uniqueId) return@listen
+        if (usableOptions.isEmpty()) {
+            return
+        }
+
+        confirmationKey.listen(listener, player.uniqueId) {
             state = MessengerState.FINISHED
-            event.isCancelled = true
         }
 
         listen<PlayerItemHeldEvent> { event ->
@@ -98,6 +100,12 @@ class JavaOptionDialogueDialogueMessenger(player: Player, entry: OptionDialogueE
 
     override fun tick(cycle: Int) {
         if (state != MessengerState.RUNNING) return
+
+        // When there are no options, just go to the next dialogue
+        if (usableOptions.isEmpty()) {
+            state = MessengerState.FINISHED
+            return
+        }
 
         if (cycle % 100 > 0) {
             // Only update periodically to avoid spamming the player
