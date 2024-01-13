@@ -3,6 +3,7 @@ package me.gabber235.typewriter.citizens.entries.cinematic
 import com.github.shynixn.mccoroutine.bukkit.minecraftDispatcher
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import it.unimi.dsi.fastutil.Pair
 import kotlinx.coroutines.withContext
 import me.gabber235.typewriter.adapters.Colors
 import me.gabber235.typewriter.adapters.modifiers.Capture
@@ -10,6 +11,7 @@ import me.gabber235.typewriter.adapters.modifiers.EntryIdentifier
 import me.gabber235.typewriter.adapters.modifiers.Help
 import me.gabber235.typewriter.adapters.modifiers.Segments
 import me.gabber235.typewriter.capture.capturers.*
+import me.gabber235.typewriter.citizens.CitizensAdapter
 import me.gabber235.typewriter.citizens.CitizensAdapter.temporaryRegistry
 import me.gabber235.typewriter.citizens.entries.artifact.NpcFrame
 import me.gabber235.typewriter.citizens.entries.artifact.NpcMovementArtifact
@@ -25,6 +27,7 @@ import net.citizensnpcs.api.trait.trait.Equipment
 import net.citizensnpcs.api.trait.trait.Equipment.EquipmentSlot.*
 import net.citizensnpcs.api.trait.trait.MobType
 import net.citizensnpcs.api.trait.trait.PlayerFilter
+import net.citizensnpcs.api.util.MemoryDataKey
 import net.citizensnpcs.trait.HologramTrait
 import net.citizensnpcs.trait.SkinTrait
 import net.citizensnpcs.trait.SneakTrait
@@ -95,7 +98,10 @@ data class ReferenceNpcData(val id: Int) : NpcData {
             CitizensAPI.getNPCRegistry().getById(id) ?: throw IllegalArgumentException("NPC with id $id not found.")
 
         val type = original.getOrAddTrait(MobType::class.java).type
-        val npc = temporaryRegistry.createNPC(type, original.name)
+        val npc = temporaryRegistry.createNPC(type, original.name);
+        val key = MemoryDataKey()
+        original.save(key)
+        npc.load(key)
 
         if (original.hasTrait(SkinTrait::class.java)) {
             val originalSkin = original.getOrAddTrait(SkinTrait::class.java)
@@ -133,6 +139,7 @@ data class ReferenceNpcData(val id: Int) : NpcData {
         } else {
             filter.addPlayer(player.uniqueId)
         }
+        CitizensAdapter.temporaryNpcMap.put(Pair.of(player.uniqueId,original.id),npc.id)
     }
 
     override fun teardown(player: Player, npc: NPC) {
@@ -146,6 +153,7 @@ data class ReferenceNpcData(val id: Int) : NpcData {
         } else {
             filter.removePlayer(player.uniqueId)
         }
+        CitizensAdapter.temporaryNpcMap.remove(Pair.of(player.uniqueId,original.id))
     }
 }
 
