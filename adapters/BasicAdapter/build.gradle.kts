@@ -1,7 +1,7 @@
 import org.jetbrains.kotlin.util.capitalizeDecapitalize.capitalizeAsciiOnly
 
 plugins {
-    kotlin("jvm") version "1.8.20"
+    kotlin("jvm") version "1.9.22"
     id("com.github.johnrengelman.shadow") version "8.1.1"
 }
 
@@ -16,6 +16,9 @@ repositories {
     maven("https://oss.sonatype.org/content/groups/public/")
     maven("https://libraries.minecraft.net/")
     maven { url = uri("https://repo.papermc.io/repository/maven-public/") }
+    // PacketEvents
+    maven("https://repo.codemc.io/repository/maven-releases/")
+    // Anvil GUI (Sub dependency of LirandAPI)
     maven("https://repo.codemc.io/repository/maven-snapshots/")
     maven("https://repo.opencollab.dev/maven-snapshots/")
 }
@@ -29,8 +32,9 @@ dependencies {
     // Already included in the TypeWriter plugin
     compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.0-RC")
     compileOnly("com.github.dyam0:LirandAPI:96cc59d4fb")
-    compileOnly("net.kyori:adventure-api:4.13.1")
-    compileOnly("net.kyori:adventure-text-minimessage:4.13.1")
+    compileOnly("com.github.Tofaa2.EntityLib:spigot:2.0.1-SNAPSHOT")
+    compileOnly("net.kyori:adventure-api:4.15.0")
+    compileOnly("net.kyori:adventure-text-minimessage:4.15.0")
 
     // External dependencies
     compileOnly("org.geysermc.floodgate:api:2.2.0-SNAPSHOT")
@@ -47,6 +51,13 @@ java {
     val javaVersion = JavaVersion.toVersion(targetJavaVersion)
     sourceCompatibility = javaVersion
     targetCompatibility = javaVersion
+    toolchain.languageVersion.set(JavaLanguageVersion.of(targetJavaVersion))
+}
+
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    kotlinOptions {
+        jvmTarget = "$targetJavaVersion"
+    }
 }
 
 val copyTemplates by tasks.registering(Copy::class) {
@@ -69,6 +80,7 @@ task<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("buildAndMove")
 
     group = "build"
     description = "Builds the jar and moves it to the server folder"
+    outputs.upToDateWhen { false }
 
     // Move the jar from the build/libs folder to the server/plugins folder
     doLast {
@@ -83,8 +95,6 @@ task<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("buildRelease")
     dependsOn("shadowJar")
     group = "build"
     description = "Builds the jar and renames it"
-
-
 
     doLast {
         // Rename the jar to remove the version and -all

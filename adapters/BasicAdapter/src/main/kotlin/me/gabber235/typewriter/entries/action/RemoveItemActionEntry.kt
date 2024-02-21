@@ -7,14 +7,13 @@ import me.gabber235.typewriter.adapters.Entry
 import me.gabber235.typewriter.adapters.modifiers.Help
 import me.gabber235.typewriter.entry.*
 import me.gabber235.typewriter.entry.entries.ActionEntry
-import me.gabber235.typewriter.utils.Icons
 import me.gabber235.typewriter.utils.Item
 import me.gabber235.typewriter.utils.optional
 import org.bukkit.Material
 import org.bukkit.entity.Player
 import java.util.*
 
-@Entry("remove_item", "Remove an item from the players inventory", Colors.RED, Icons.WAND_SPARKLES)
+@Entry("remove_item", "Remove an item from the players inventory", Colors.RED, "icomoon-free:user-minus")
 /**
  * The `Remove Item Action` is an action that removes an item from the player's inventory.
  * This action provides you with the ability to remove items from the player's inventory in response to specific events.
@@ -34,14 +33,37 @@ class RemoveItemActionEntry(
     override val name: String = "",
     override val criteria: List<Criteria>,
     override val modifiers: List<Modifier>,
-    override val triggers: List<String> = emptyList(),
+    override val triggers: List<Ref<TriggerableEntry>> = emptyList(),
     @Help("The item to remove.")
     val item: Item = Item.Empty,
 ) : ActionEntry {
     override fun execute(player: Player) {
         super.execute(player)
 
-        player.inventory.removeItemAnySlot(item.build(player))
+        // Because item.build() can return a identical looking item but with different data,
+        // we need to compare the items
+
+        val itemWithoutAmount = item.copy(amount = Optional.empty())
+
+        val items = player.inventory.contents.withIndex().filter {
+            itemWithoutAmount.isSameAs(player, it.value)
+        }.iterator()
+
+        var toRemove = item.amount.orElse(1)
+
+        while (toRemove > 0 && items.hasNext()) {
+            val (index, item) = items.next()
+            if (item == null) continue
+            val amount = item.amount
+            if (amount > toRemove) {
+                item.amount = amount - toRemove
+                player.inventory.setItem(index, item)
+                break
+            } else {
+                toRemove -= amount
+                player.inventory.setItem(index, null)
+            }
+        }
     }
 }
 

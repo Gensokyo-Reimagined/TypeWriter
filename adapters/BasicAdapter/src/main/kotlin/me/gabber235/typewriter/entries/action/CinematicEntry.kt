@@ -8,11 +8,10 @@ import me.gabber235.typewriter.adapters.modifiers.Page
 import me.gabber235.typewriter.entry.*
 import me.gabber235.typewriter.entry.entries.CinematicStartTrigger
 import me.gabber235.typewriter.entry.entries.CustomTriggeringActionEntry
-import me.gabber235.typewriter.utils.Icons
 import org.bukkit.entity.Player
 
 
-@Entry("cinematic", "Start a new cinematic", Colors.RED, Icons.CAMERA_RETRO)
+@Entry("cinematic", "Start a new cinematic", Colors.RED, "fa-solid:camera-retro")
 /**
  * The `Cinematic` action is used to start a new cinematic.
  *
@@ -25,7 +24,7 @@ class CinematicEntry(
     override val id: String = "",
     override val name: String = "",
     @SerializedName("triggers")
-    override val customTriggers: List<String> = emptyList(),
+    override val customTriggers: List<Ref<TriggerableEntry>> = emptyList(),
     override val criteria: List<Criteria> = emptyList(),
     override val modifiers: List<Modifier> = emptyList(),
     @SerializedName("page")

@@ -7,9 +7,13 @@ runs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: "master"
+          channel: "beta"
       - name: Get Flutter dependencies
         run: flutter pub get
+        shell: bash
+        working-directory: ./app
+      - name: Run Lint
+        run: flutter analyze
         shell: bash
         working-directory: ./app
       - name: Run tests
@@ -17,7 +21,7 @@ runs:
         shell: bash
         working-directory: ./app
       - name: Build web app
-        run: flutter build web --release --no-tree-shake-icons
+        run: flutter build web --release
         shell: bash
         working-directory: ./app
       - name: Test Plugin

@@ -1,11 +1,16 @@
 package me.gabber235.typewriter.entry.entries
 
+import lirand.api.extensions.server.server
 import me.gabber235.typewriter.adapters.Tags
 import me.gabber235.typewriter.adapters.modifiers.Help
 import me.gabber235.typewriter.adapters.modifiers.MultiLine
+import me.gabber235.typewriter.entry.PlaceholderEntry
+import me.gabber235.typewriter.entry.Ref
 import me.gabber235.typewriter.entry.StaticEntry
-import me.gabber235.typewriter.facts.Fact
+import me.gabber235.typewriter.facts.FactData
 import me.gabber235.typewriter.facts.FactDatabase
+import me.gabber235.typewriter.facts.FactId
+import org.bukkit.entity.Player
 import org.koin.java.KoinJavaComponent.get
 import java.util.*
 
@@ -14,51 +19,107 @@ interface FactEntry : StaticEntry {
     @MultiLine
     @Help("A comment to keep track of what this fact is used for.")
     val comment: String
+
+    @Help("The group that this fact is for.")
+    val group: Ref<GroupEntry>
+
+    fun identifier(player: Player): FactId? {
+        val entry = group.get()
+
+        val groupId = if (entry != null) {
+            // If the player is not in an group, we don't want to do anything with this fact
+            entry.groupId(player) ?: return null
+        } else {
+            // If no group entry is set, we assume that the player is the group for backwards compatibility
+            GroupId(player.uniqueId)
+        }
+
+        return FactId(id, groupId)
+    }
 }
 
 @Tags("readable-fact")
-interface ReadableFactEntry : FactEntry {
-    fun read(playerId: UUID): Fact
+interface ReadableFactEntry : FactEntry, PlaceholderEntry {
+    fun readForPlayersGroup(player: Player): FactData {
+        val factId = identifier(player) ?: return FactData(0,"")
+        return readForGroup(factId.groupId)
+    }
+
+    fun readForGroup(groupId: GroupId): FactData {
+        val entry = group.get()
+        if (entry == null) {
+            // If no group entry is set, we assume that the player is the group for backwards compatibility
+            val player = server.getPlayer(UUID.fromString(groupId.id)) ?: return FactData(0,"")
+            return readSinglePlayer(player)
+        }
+        val group = entry.group(groupId)
+        return group.players.map { readSinglePlayer(it) }.let { FactData(it.sumOf(FactData::numValue),"") }
+    }
+
+    /**
+     * This should **not** be used directly. Use [readForPlayersGroup] instead.
+     */
+    fun readSinglePlayer(player: Player): FactData
+
+    override fun display(player: Player?): String? {
+        if (player == null) return null
+        return "${readForPlayersGroup(player).numValue} ${readForPlayersGroup(player).strValue}"
+    }
 }
 
 @Tags("writable-fact")
 interface WritableFactEntry : FactEntry {
-    fun write(playerId: UUID, value: Int)
-    fun write(playerId: UUID, value: String)
+    fun write(player: Player, value: Int) {
+        val factId = identifier(player) ?: return
+        write(factId, value)
+    }
+
+    fun write(id: FactId, value: Int)
+
+    fun write(player: Player, value: String) {
+        val factId = identifier(player) ?: return
+        write(factId, value)
+    }
+
+    fun write(id: FactId, value: String)
 }
 
 @Tags("cachable-fact")
 interface CachableFactEntry : ReadableFactEntry, WritableFactEntry {
 
-    override fun read(playerId: UUID): Fact {
-        val factDatabase: FactDatabase = get(FactDatabase::class.java)
-        return factDatabase.getCachedFact(playerId, id) ?: Fact(id, 0, "")
+    override fun readForGroup(groupId: GroupId): FactData {
+        return read(FactId(id, groupId))
     }
 
-    override fun write(playerId: UUID, value: Int) {
-        val existingFact = read(playerId)
-        if (!canCache(existingFact)) return
-        //we need to rea
-        val factDatabase: FactDatabase = get(FactDatabase::class.java)
-        factDatabase.setCachedFact(playerId, Fact(id, value, existingFact.strValue))
+    override fun readSinglePlayer(player: Player): FactData {
+        throw UnsupportedOperationException("This method should not be used directly. Use readForPlayer instead.")
     }
 
-    override fun write(playerId: UUID, value: String) {
-        val existingFact = read(playerId)
-        if (!canCache(existingFact)) return
+    fun read(id: FactId): FactData {
         val factDatabase: FactDatabase = get(FactDatabase::class.java)
-        factDatabase.setCachedFact(playerId, Fact(id, existingFact.numValue, value))
+        return factDatabase[id] ?: FactData(0,"")
     }
 
-    fun canCache(fact: Fact): Boolean = true
+    override fun write(id: FactId, value: Int) {
+        if (!canCache(id, read(id))) return
+        val factDatabase: FactDatabase = get(FactDatabase::class.java)
+        factDatabase[id] = FactData(value,read(id).strValue)
+    }
+
+    override fun write(id: FactId, value: String) {
+        if (!canCache(id, read(id))) return
+        val factDatabase: FactDatabase = get(FactDatabase::class.java)
+        factDatabase[id] = FactData(read(id).numValue,value)
+    }
+    fun canCache(id: FactId, factData: FactData): Boolean = true
 }
 
 @Tags("persistable-fact")
 interface PersistableFactEntry : CachableFactEntry {
-    fun canPersist(fact: Fact): Boolean = true
+    fun canPersist(id: FactId, data: FactData): Boolean = true
 }
 
 @Tags("expirable-fact")
 interface ExpirableFactEntry : CachableFactEntry {
-    fun hasExpired(fact: Fact): Boolean = false
+    fun hasExpired(id: FactId, data: FactData): Boolean = false
 }

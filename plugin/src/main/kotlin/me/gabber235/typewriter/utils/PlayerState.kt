@@ -1,9 +1,14 @@
 package me.gabber235.typewriter.utils
 
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSetSlot
+import io.github.retrooper.packetevents.util.SpigotReflectionUtil
+import me.gabber235.typewriter.extensions.packetevents.sendPacketTo
 import me.gabber235.typewriter.plugin
 import org.bukkit.GameMode
 import org.bukkit.Location
 import org.bukkit.entity.Player
+import org.bukkit.inventory.EquipmentSlot
+import org.bukkit.inventory.ItemStack
 import org.bukkit.potion.PotionEffect
 import org.bukkit.potion.PotionEffectType
 
@@ -64,6 +69,41 @@ data class EffectStateProvider(
     }
 }
 
+data class InventorySlotStateProvider(
+    private val slot: Int,
+) : PlayerStateProvider {
+
+    override fun store(player: Player): Any {
+        EquipmentSlot.HAND
+        return player.inventory.getItem(slot) ?: return false
+    }
+
+    override fun restore(player: Player, value: Any) {
+        if (value !is ItemStack) {
+            player.inventory.setItem(slot, null)
+            return
+        }
+        player.inventory.setItem(slot, value)
+    }
+}
+
+data class EquipmentSlotStateProvider(
+    private val slot: EquipmentSlot,
+) : PlayerStateProvider {
+
+    override fun store(player: Player): Any {
+        return player.inventory.getItem(slot)
+    }
+
+    override fun restore(player: Player, value: Any) {
+        if (value !is ItemStack) {
+            player.inventory.setItem(slot, null)
+            return
+        }
+        player.inventory.setItem(slot, value)
+    }
+}
+
 fun Player.state(vararg keys: PlayerStateProvider): PlayerState = state(keys)
 
 @JvmName("stateArray")
@@ -73,4 +113,24 @@ fun Player.state(keys: Array<out PlayerStateProvider>): PlayerState {
 
 fun Player.restore(state: PlayerState?) {
     state?.state?.forEach { (key, value) -> key.restore(this, value) }
+}
+
+fun Player.fakeClearInventory() {
+    for (i in 0..46) {
+        val item = inventory.getItem(i) ?: continue
+        if (item.type.isAir) continue
+
+        val packet = WrapperPlayServerSetSlot(-2, 0, i, com.github.retrooper.packetevents.protocol.item.ItemStack.EMPTY)
+        packet.sendPacketTo(this)
+    }
+}
+
+fun Player.restoreInventory() {
+    for (i in 0..46) {
+        val item = inventory.getItem(i) ?: continue
+        if (item.type.isAir) continue
+
+        val packet = WrapperPlayServerSetSlot(-2, 0, i, SpigotReflectionUtil.decodeBukkitItemStack(item))
+        packet.sendPacketTo(this)
+    }
 }

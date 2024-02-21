@@ -1,11 +1,12 @@
 import "package:collection/collection.dart";
 import "package:flutter/material.dart" hide FilledButton;
 import "package:flutter_hooks/flutter_hooks.dart";
-import "package:font_awesome_flutter/font_awesome_flutter.dart";
 import "package:hooks_riverpod/hooks_riverpod.dart";
 import "package:typewriter/models/adapter.dart";
+import "package:typewriter/utils/icons.dart";
 import "package:typewriter/utils/passing_reference.dart";
 import "package:typewriter/utils/popups.dart";
+import "package:typewriter/widgets/components/general/iconify.dart";
 import "package:typewriter/widgets/inspector/editors.dart";
 import "package:typewriter/widgets/inspector/editors/enum.dart";
 import "package:typewriter/widgets/inspector/editors/field.dart";
@@ -52,6 +53,7 @@ class MapEditor extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // ignore: provider_parameters
     final rawValue = ref.watch(fieldValueProvider(path, {}));
 
     // Since the map will be of the form {dynamic: dynamic}, we
@@ -133,15 +135,15 @@ class _MapEntry extends HookConsumerWidget {
     String key,
   ) async {
     if (_alreadyContainsKey(key)) {
-      showConfirmationDialogue(
+      final confirm = await showConfirmationDialogue(
         context: context,
         title: "Override key?",
         content:
             "The key '$key' already exists.\nThis will delete all the data from the existing key.",
-        confirmIcon: FontAwesomeIcons.triangleExclamation,
+        confirmIcon: TWIcons.warning,
         onConfirm: () => _changeKeyField(ref, key),
       );
-      return;
+      if (!confirm) return;
     }
     _changeKeyField(ref, key);
   }
@@ -193,11 +195,11 @@ class _MapEntry extends HookConsumerWidget {
         children: [
           Row(
             children: [
-              const Icon(FontAwesomeIcons.barsStaggered, size: 12),
+              const Iconify(TWIcons.barsStaggered, size: 12),
               const SizedBox(width: 8),
               _keyEditor(context, ref, name),
               IconButton(
-                icon: const Icon(FontAwesomeIcons.trash, size: 12),
+                icon: const Iconify(TWIcons.trash, size: 12),
                 color: Theme.of(context).colorScheme.error,
                 onPressed: () => _delete(ref.passing, map, entry.key),
               ),
@@ -236,7 +238,7 @@ class _StringKey extends HookConsumerWidget {
       path: path,
       field: field,
       forcedValue: value,
-      icon: FontAwesomeIcons.key,
+      icon: TWIcons.key,
       hint: "Enter a key",
       onChanged: onChanged,
     );
@@ -261,7 +263,7 @@ class _EnumKey extends HookConsumerWidget {
       path: path,
       field: field,
       forcedValue: value,
-      icon: FontAwesomeIcons.key,
+      icon: TWIcons.key,
       onChanged: onChanged,
     );
   }

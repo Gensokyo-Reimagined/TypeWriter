@@ -2,7 +2,6 @@ package me.gabber235.typewriter.ui
 
 import com.corundumstudio.socketio.AckRequest
 import com.corundumstudio.socketio.SocketIOClient
-import com.github.shynixn.mccoroutine.bukkit.launch
 import com.google.gson.Gson
 import com.google.gson.JsonArray
 import com.google.gson.JsonElement
@@ -13,7 +12,7 @@ import me.gabber235.typewriter.capture.RecorderRequestContext
 import me.gabber235.typewriter.capture.Recorders
 import me.gabber235.typewriter.entry.StagingManager
 import me.gabber235.typewriter.logger
-import me.gabber235.typewriter.plugin
+import me.gabber235.typewriter.utils.ThreadType.SYNC
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import org.koin.core.qualifier.named
@@ -27,6 +26,7 @@ interface ClientSynchronizer {
     fun handleChangePageValue(client: SocketIOClient, data: String, ackRequest: AckRequest)
 
     fun handleDeletePage(client: SocketIOClient, name: String, ack: AckRequest)
+    fun handleMoveEntry(client: SocketIOClient, data: String, ack: AckRequest)
 
     fun handleCreateEntry(client: SocketIOClient, data: String, ack: AckRequest)
 
@@ -100,6 +100,14 @@ class ClientSynchronizerImpl : ClientSynchronizer, KoinComponent {
         }
     }
 
+    override fun handleMoveEntry(client: SocketIOClient, data: String, ack: AckRequest) {
+        val (entryId, fromPage, toPage) = gson.fromJson(data, MoveEntry::class.java)
+        val result = stagingManager.moveEntry(entryId, fromPage, toPage)
+        ack.sendResult(result) {
+            communicationHandler.server?.broadcastOperations?.sendEvent("moveEntry", client, data)
+        }
+    }
+
     override fun handleCreateEntry(client: SocketIOClient, data: String, ack: AckRequest) {
         val json = gson.fromJson(data, EntryCreate::class.java)
         val result = stagingManager.createEntry(json.pageId, json.entry)
@@ -143,7 +151,7 @@ class ClientSynchronizerImpl : ClientSynchronizer, KoinComponent {
 
 
     override fun handlePublish(client: SocketIOClient, data: String, ack: AckRequest) {
-        plugin.launch {
+        SYNC.launch {
             val result = stagingManager.publish()
             ack.sendResult(result)
         }
@@ -222,6 +230,13 @@ private data class PageValueUpdate(
     val path: String,
     val value: JsonElement
 )
+
+private data class MoveEntry(
+    val entryId: String,
+    val fromPage: String,
+    val toPage: String,
+)
+
 
 private data class EntryCreate(
     val pageId: String,

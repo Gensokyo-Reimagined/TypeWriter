@@ -1,5 +1,6 @@
 package me.gabber235.typewriter
 
+import com.github.retrooper.packetevents.PacketEvents
 import com.github.shynixn.mccoroutine.bukkit.launch
 import com.google.gson.Gson
 import kotlinx.coroutines.delay
@@ -10,18 +11,23 @@ import me.gabber235.typewriter.capture.Recorders
 import me.gabber235.typewriter.entry.*
 import me.gabber235.typewriter.entry.dialogue.MessengerFinder
 import me.gabber235.typewriter.extensions.bstats.BStatsMetrics
-import me.gabber235.typewriter.extensions.placeholderapi.TypewriteExpansion
+import me.gabber235.typewriter.extensions.modrinth.Modrinth
+import me.gabber235.typewriter.extensions.placeholderapi.PlaceholderExpansion
 import me.gabber235.typewriter.facts.FactDatabase
 import me.gabber235.typewriter.facts.FactStorage
 import me.gabber235.typewriter.facts.storage.FileFactStorage
 import me.gabber235.typewriter.interaction.ActionBarBlockerHandler
 import me.gabber235.typewriter.interaction.ChatHistoryHandler
 import me.gabber235.typewriter.interaction.InteractionHandler
+import me.gabber235.typewriter.interaction.PacketBlocker
 import me.gabber235.typewriter.snippets.SnippetDatabase
 import me.gabber235.typewriter.snippets.SnippetDatabaseImpl
 import me.gabber235.typewriter.ui.*
 import me.gabber235.typewriter.utils.createBukkitDataParser
 import me.gabber235.typewriter.utils.syncCommands
+import me.tofaa.entitylib.APIConfig
+import me.tofaa.entitylib.EntityLib
+import me.tofaa.entitylib.spigot.SpigotEntityLibPlatform
 import org.bukkit.plugin.Plugin
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
@@ -35,9 +41,13 @@ import org.koin.core.module.dsl.withOptions
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
 import org.koin.java.KoinJavaComponent
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.logging.Logger
+import kotlin.time.Duration.Companion.seconds
 
 class Typewriter : KotlinPlugin(), KoinComponent {
+
+    private val entityId = AtomicInteger(100000)
 
     override fun onLoad() {
         super.onLoad()
@@ -53,20 +63,22 @@ class Typewriter : KotlinPlugin(), KoinComponent {
             singleOf<EntryDatabase>(::EntryDatabaseImpl)
             singleOf<StagingManager>(::StagingManagerImpl)
             singleOf<ClientSynchronizer>(::ClientSynchronizerImpl)
-            singleOf<InteractionHandler>(::InteractionHandler)
-            singleOf<MessengerFinder>(::MessengerFinder)
-            singleOf<CommunicationHandler>(::CommunicationHandler)
-            singleOf<Writers>(::Writers)
-            singleOf<PanelHost>(::PanelHost)
+            singleOf(::InteractionHandler)
+            singleOf(::MessengerFinder)
+            singleOf(::CommunicationHandler)
+            singleOf(::Writers)
+            singleOf(::PanelHost)
             singleOf<SnippetDatabase>(::SnippetDatabaseImpl)
-            singleOf<FactDatabase>(::FactDatabase)
+            singleOf(::FactDatabase)
             singleOf<FactStorage>(::FileFactStorage)
-            singleOf<EntryListeners>(::EntryListeners)
-            singleOf<Recorders>(::Recorders)
+            singleOf(::EntryListeners)
+            singleOf(::AudienceManager)
+            singleOf(::Recorders)
             singleOf<AssetStorage>(::LocalAssetStorage)
-            singleOf<AssetManager>(::AssetManager)
-            single { ChatHistoryHandler(get()) }
-            single { ActionBarBlockerHandler(get()) }
+            singleOf(::AssetManager)
+            singleOf(::ChatHistoryHandler)
+            singleOf(::ActionBarBlockerHandler)
+            singleOf(::PacketBlocker)
             factory<Gson>(named("entryParser")) { createEntryParserGson(get()) }
             factory<Gson>(named("bukkitDataParser")) { createBukkitDataParser() }
         }
@@ -81,13 +93,22 @@ class Typewriter : KotlinPlugin(), KoinComponent {
     override suspend fun onEnableAsync() {
         typeWriterCommand()
 
-        if (!server.pluginManager.isPluginEnabled("ProtocolLib")) {
+        if (!server.pluginManager.isPluginEnabled("packetevents")) {
             logger.warning(
-                "ProtocolLib is not enabled, Typewriter will not work without it. Shutting down..."
+                "PacketEvents is not enabled, Typewriter will not work without it. Shutting down..."
             )
             server.pluginManager.disablePlugin(this)
             return
         }
+
+        val platform = SpigotEntityLibPlatform(this)
+        val settings = APIConfig(PacketEvents.getAPI())
+            .debugMode()
+            .useAsyncEvents()
+            .usePlatformLogger()
+            .tickTickables()
+
+        EntityLib.init(platform, settings)
 
         get<EntryDatabase>().initialize()
         get<StagingManager>().initialize()
@@ -96,10 +117,12 @@ class Typewriter : KotlinPlugin(), KoinComponent {
         get<MessengerFinder>().initialize()
         get<ChatHistoryHandler>().initialize()
         get<ActionBarBlockerHandler>().initialize()
+        get<PacketBlocker>().initialize()
         get<AssetManager>().initialize()
+        get<AudienceManager>().initialize()
 
         if (server.pluginManager.getPlugin("PlaceholderAPI") != null) {
-            TypewriteExpansion.register()
+            PlaceholderExpansion.register()
         }
 
         syncCommands()
@@ -113,6 +136,9 @@ class Typewriter : KotlinPlugin(), KoinComponent {
             get<AdapterLoader>().initializeAdapters()
             get<EntryDatabase>().loadEntries()
             get<CommunicationHandler>().initialize()
+
+            delay(5.seconds)
+            Modrinth.initialize()
         }
     }
 
@@ -122,11 +148,13 @@ class Typewriter : KotlinPlugin(), KoinComponent {
         get<StagingManager>().shutdown()
         get<ChatHistoryHandler>().shutdown()
         get<ActionBarBlockerHandler>().shutdown()
+        get<PacketBlocker>().shutdown()
         get<CommunicationHandler>().shutdown()
         get<InteractionHandler>().shutdown()
         get<EntryListeners>().unregister()
         get<FactDatabase>().shutdown()
         get<AssetManager>().shutdown()
+        get<AudienceManager>().shutdown()
     }
 }
 

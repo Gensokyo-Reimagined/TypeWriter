@@ -1,8 +1,6 @@
 package me.gabber235.typewriter.entry
 
 import com.google.gson.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import lirand.api.extensions.events.listen
 import me.gabber235.typewriter.entry.StagingState.*
 import me.gabber235.typewriter.events.PublishedBookEvent
@@ -11,6 +9,7 @@ import me.gabber235.typewriter.events.TypewriterReloadEvent
 import me.gabber235.typewriter.logger
 import me.gabber235.typewriter.plugin
 import me.gabber235.typewriter.utils.*
+import me.gabber235.typewriter.utils.ThreadType.DISPATCHERS_ASYNC
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import org.koin.core.qualifier.named
@@ -27,6 +26,7 @@ interface StagingManager {
     fun renamePage(oldName: String, newName: String): Result<String>
     fun changePageValue(pageId: String, path: String, value: JsonElement): Result<String>
     fun deletePage(name: String): Result<String>
+    fun moveEntry(entryId: String, fromPage: String, toPage: String): Result<String>
     fun createEntry(pageId: String, data: JsonObject): Result<String>
     fun updateEntryField(pageId: String, entryId: String, path: String, value: JsonElement): Result<String>
     fun updateEntry(pageId: String, data: JsonObject): Result<String>
@@ -121,8 +121,8 @@ class StagingManagerImpl : StagingManager, KoinComponent {
     }
 
     override fun renamePage(oldName: String, newName: String): Result<String> {
-        val oldPage = pages[oldName] ?: return failure("Page '$oldName' does not exist")
         if (pages.containsKey(newName)) return failure("Page with that name already exists")
+        val oldPage = pages.remove(oldName) ?: return failure("Page '$oldName' does not exist")
 
         oldPage.addProperty("name", newName)
 
@@ -143,14 +143,22 @@ class StagingManagerImpl : StagingManager, KoinComponent {
     override fun deletePage(name: String): Result<String> {
         pages.remove(name) ?: return failure("Page does not exist")
 
-        // Delete from the file system
-        val file = stagingDir["$name.json"]
-        if (file.exists()) {
-            file.delete()
-        }
-
         autoSaver()
         return ok("Successfully deleted page with name $name")
+    }
+
+    override fun moveEntry(entryId: String, fromPage: String, toPage: String): Result<String> {
+        val from = pages[fromPage] ?: return failure("Page '$fromPage' does not exist")
+        val to = pages[toPage] ?: return failure("Page '$toPage' does not exist")
+
+        val entry = from["entries"].asJsonArray.find { it.asJsonObject["id"].asString == entryId }
+            ?: return failure("Entry does not exist in page '$fromPage'")
+
+        from["entries"].asJsonArray.remove(entry)
+        to["entries"].asJsonArray.add(entry)
+
+        autoSaver()
+        return ok("Successfully moved entry")
     }
 
     override fun createEntry(pageId: String, data: JsonObject): Result<String> {
@@ -250,6 +258,8 @@ class StagingManagerImpl : StagingManager, KoinComponent {
             file.writeText(page.toString())
         }
 
+        dir.listFiles()?.filter { it.nameWithoutExtension !in pages.keys }?.forEach { it.delete() }
+
         stagingState = STAGING
     }
 
@@ -257,7 +267,7 @@ class StagingManagerImpl : StagingManager, KoinComponent {
     override suspend fun publish(): Result<String> {
         if (stagingState != STAGING) return failure("Can only publish when in staging")
         autoSaver.cancel()
-        return withContext(Dispatchers.IO) {
+        return DISPATCHERS_ASYNC.switchContext {
             stagingState = PUBLISHING
 
             try {

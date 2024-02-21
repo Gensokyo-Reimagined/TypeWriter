@@ -1,8 +1,7 @@
 package me.gabber235.typewriter.capture
 
-import com.github.shynixn.mccoroutine.bukkit.launch
 import me.gabber235.typewriter.adapters.AdapterLoader
-import me.gabber235.typewriter.plugin
+import me.gabber235.typewriter.utils.ThreadType.SYNC
 import me.gabber235.typewriter.utils.failure
 import me.gabber235.typewriter.utils.ok
 import org.bukkit.entity.Player
@@ -85,7 +84,7 @@ class Recorders : KoinComponent {
 
         val capturer = capturerResult.getOrThrow()
 
-        plugin.launch {
+        SYNC.launch {
             record(player, capturer, context.cinematicData)
         }
 
@@ -143,17 +142,17 @@ sealed interface RecorderResponse {
         }
     }
 
-    object CapturedRecording : RecorderResponse {
+    data object CapturedRecording : RecorderResponse {
         override val message: String = "Captured Field!"
         override val status: RecorderResponseStatus = RecorderResponseStatus.SUCCESS
     }
 
-    object RecordingStarting : RecorderResponse {
+    data object RecordingStarting : RecorderResponse {
         override val message: String = "Join the server to start recording!"
         override val status: RecorderResponseStatus = RecorderResponseStatus.SUCCESS
     }
 
-    object CapturerNotFound : RecorderResponse {
+    data object CapturerNotFound : RecorderResponse {
         override val message: String =
             "The capturer for this field was not found! Report to the typewriter adapter developer."
         override val status: RecorderResponseStatus = RecorderResponseStatus.ERROR
@@ -165,7 +164,7 @@ sealed interface RecorderResponse {
         override val status: RecorderResponseStatus = RecorderResponseStatus.ERROR
     }
 
-    object AlreadyRecording : RecorderResponse {
+    data object AlreadyRecording : RecorderResponse {
         override val message: String = "You are already recording!"
         override val status: RecorderResponseStatus = RecorderResponseStatus.ERROR
     }

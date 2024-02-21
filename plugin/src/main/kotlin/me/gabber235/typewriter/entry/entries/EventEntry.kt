@@ -2,9 +2,7 @@ package me.gabber235.typewriter.entry.entries
 
 import me.gabber235.typewriter.adapters.Tags
 import me.gabber235.typewriter.adapters.modifiers.Help
-import me.gabber235.typewriter.entry.Entry
-import me.gabber235.typewriter.entry.TriggerEntry
-import me.gabber235.typewriter.entry.triggerAllFor
+import me.gabber235.typewriter.entry.*
 import org.bukkit.entity.Player
 import java.util.*
 
@@ -23,9 +21,9 @@ interface CustomCommandEntry : EventEntry {
     }
 
     sealed interface CommandFilterResult {
-        object Success : CommandFilterResult
-        object Failure : CommandFilterResult
-        object FailureWithDefaultMessage : CommandFilterResult
+        data object Success : CommandFilterResult
+        data object Failure : CommandFilterResult
+        data object FailureWithDefaultMessage : CommandFilterResult
         data class FailureWithMessage(val message: String) : CommandFilterResult
     }
 
@@ -63,7 +61,10 @@ interface EventTrigger {
     val id: String
 }
 
-data class EntryTrigger(override val id: String) : EventTrigger
+data class EntryTrigger(override val id: String) : EventTrigger {
+    constructor(entry: Entry) : this(entry.id)
+    constructor(reference: Ref<out Entry>) : this(reference.id)
+}
 
 enum class SystemTrigger : EventTrigger {
     DIALOGUE_NEXT,
@@ -73,11 +74,15 @@ enum class SystemTrigger : EventTrigger {
 
     override val id: String
         get() = "system.${name.lowercase().replace('_', '.')}"
+
+    override fun toString(): String {
+        return "SystemTrigger(id='$id')"
+    }
 }
 
-class CinematicStartTrigger(
+data class CinematicStartTrigger(
     val pageId: String,
-    val triggers: List<String> = emptyList(),
+    val triggers: List<Ref<TriggerableEntry>> = emptyList(),
     val override: Boolean = false,
     val simulate: Boolean = false,
     val ignoreEntries: List<String> = emptyList(),

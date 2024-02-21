@@ -2,30 +2,33 @@ import "dart:async";
 
 import "package:auto_route/auto_route.dart";
 import "package:collection/collection.dart";
-import "package:flutter/material.dart" hide FilledButton, ContextMenuController;
+import "package:flutter/material.dart" hide ContextMenuController, FilledButton;
 import "package:flutter/services.dart";
 import "package:flutter_animate/flutter_animate.dart";
 import "package:flutter_hooks/flutter_hooks.dart";
-import "package:font_awesome_flutter/font_awesome_flutter.dart";
 import "package:freezed_annotation/freezed_annotation.dart";
 import "package:hooks_riverpod/hooks_riverpod.dart";
 import "package:riverpod_annotation/riverpod_annotation.dart";
 import "package:typewriter/app_router.dart";
 import "package:typewriter/hooks/delayed_execution.dart";
+import "package:typewriter/models/adapter.dart";
 import "package:typewriter/models/book.dart";
+import "package:typewriter/models/entry.dart";
 import "package:typewriter/models/page.dart";
 import "package:typewriter/models/writers.dart";
 import "package:typewriter/pages/page_editor.dart";
 import "package:typewriter/utils/extensions.dart";
+import "package:typewriter/utils/icons.dart";
 import "package:typewriter/utils/passing_reference.dart";
 import "package:typewriter/utils/popups.dart";
 import "package:typewriter/widgets/components/app/empty_screen.dart";
-import "package:typewriter/widgets/components/app/select_entries.dart";
+import "package:typewriter/widgets/components/app/entry_node.dart";
 import "package:typewriter/widgets/components/app/writers.dart";
 import "package:typewriter/widgets/components/general/context_menu_region.dart";
 import "package:typewriter/widgets/components/general/dropdown.dart";
 import "package:typewriter/widgets/components/general/filled_button.dart";
 import "package:typewriter/widgets/components/general/formatted_text_field.dart";
+import "package:typewriter/widgets/components/general/iconify.dart";
 import "package:typewriter/widgets/components/general/tree_view.dart";
 import "package:typewriter/widgets/components/general/validated_text_field.dart";
 
@@ -132,11 +135,7 @@ class _PagesSelector extends HookConsumerWidget {
                         children: [
                           _PagesTree(showFull: hovering.value),
                           const SizedBox(height: 12),
-                          // When selecting entries we don't want to be able to add new pages
-                          if (hovering.value)
-                            const SelectingEntriesBlocker(
-                              child: _AddPageButton(),
-                            ),
+                          if (hovering.value) const _AddPageButton(),
                         ],
                       ),
                     ),
@@ -249,61 +248,84 @@ class _TreeCategory extends HookConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        DragTarget<String>(
-          onWillAcceptWithDetails: (details) {
-            return ref.read(_pageNamesProvider).contains(details.data);
-          },
-          onAcceptWithDetails: (details) {
-            final pageId = details.data;
-            ref
-                .read(pageProvider(pageId))
-                ?.changeChapter(ref.passing, node.name);
-          },
-          builder: (context, candidateData, rejectedData) => Material(
-            color: Colors.transparent,
-            shape: RoundedRectangleBorder(
-              side: candidateData.isNotEmpty
-                  ? BorderSide(
-                      color: Theme.of(context).colorScheme.primary,
-                      width: 2,
-                    )
-                  : BorderSide.none,
-              borderRadius: const BorderRadius.all(Radius.circular(8)),
-            ),
-            child: InkWell(
-              onTap: () => isExpanded.value = !isExpanded.value,
-              borderRadius: BorderRadius.circular(8),
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Row(
-                  children: [
-                    if (showFull) const SizedBox(width: 4),
-                    Padding(
-                      padding: EdgeInsets.symmetric(vertical: showFull ? 4 : 0),
-                      child: Icon(
-                        isExpanded.value
-                            ? FontAwesomeIcons.chevronDown
-                            : FontAwesomeIcons.chevronRight,
-                        size: 11,
-                        color: Colors.white,
-                      ),
-                    ),
-                    if (showFull) ...[
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          node.name.formatted,
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Colors.white,
-                                  ),
-                        ),
-                      ),
-                    ],
-                  ],
+        ContextMenuRegion(
+          builder: (context) {
+            return [
+              ContextMenuTile.button(
+                title: "New Page",
+                icon: TWIcons.plus,
+                onTap: () => showDialog(
+                  context: context,
+                  builder: (_) => AddPageDialogue(chapter: node.path),
                 ),
               ),
-            ),
+            ];
+          },
+          child: DragTarget<PageDrag>(
+            onWillAcceptWithDetails: (details) {
+              return ref.read(_pageNamesProvider).contains(details.data.pageId);
+            },
+            onAcceptWithDetails: (details) {
+              final pageId = details.data.pageId;
+              ref
+                  .read(pageProvider(pageId))
+                  ?.changeChapter(ref.passing, node.path);
+            },
+            builder: (context, candidateData, rejectedData) {
+              final isAccepting = candidateData.isNotEmpty;
+              final isRejecting = rejectedData.isNotEmpty;
+              return Material(
+                color: Colors.transparent,
+                shape: RoundedRectangleBorder(
+                  side: isAccepting || isRejecting
+                      ? BorderSide(
+                          color: isAccepting
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.error,
+                          width: 2,
+                        )
+                      : BorderSide.none,
+                  borderRadius: const BorderRadius.all(Radius.circular(8)),
+                ),
+                child: InkWell(
+                  onTap: () => isExpanded.value = !isExpanded.value,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Row(
+                      children: [
+                        if (showFull) const SizedBox(width: 4),
+                        Padding(
+                          padding:
+                              EdgeInsets.symmetric(vertical: showFull ? 4 : 0),
+                          child: Iconify(
+                            isExpanded.value
+                                ? TWIcons.chevronDown
+                                : TWIcons.chevronRight,
+                            size: 11,
+                            color: Colors.white,
+                          ),
+                        ),
+                        if (showFull) ...[
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              node.name.formatted,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: Colors.white,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
         ),
         AnimatedSize(
@@ -369,7 +391,7 @@ class _PageTile extends HookConsumerWidget {
     return [
       ContextMenuTile.button(
         title: "Rename",
-        icon: FontAwesomeIcons.pen,
+        icon: TWIcons.pencil,
         onTap: () => showDialog(
           context: context,
           builder: (_) => RenamePageDialogue(old: pageId),
@@ -377,17 +399,25 @@ class _PageTile extends HookConsumerWidget {
       ),
       ContextMenuTile.button(
         title: "Change Chapter",
-        icon: FontAwesomeIcons.bookBookmark,
+        icon: TWIcons.bookMarker,
         onTap: () => showDialog(
           context: context,
           builder: (_) =>
               ChangeChapterDialogue(pageId: pageId, chapter: chapter),
         ),
       ),
+      ContextMenuTile.button(
+        title: "Change Priority",
+        icon: TWIcons.priority,
+        onTap: () => showDialog(
+          context: context,
+          builder: (_) => ChangePagePriorityDialogue(pageId: pageId),
+        ),
+      ),
       ContextMenuTile.divider(),
       ContextMenuTile.button(
         title: "Delete",
-        icon: FontAwesomeIcons.trash,
+        icon: TWIcons.trash,
         color: Colors.redAccent,
         onTap: () => showPageDeletionDialogue(context, ref.passing, pageId),
       ),
@@ -411,103 +441,134 @@ class _PageTile extends HookConsumerWidget {
           padding: EdgeInsets.only(
             top: _needsShift(amount) ? 30 : 0,
           ),
-          child: DragTarget<String>(
+          child: DragTarget<EntryDrag>(
             onWillAcceptWithDetails: (details) {
-              return ref.read(_pageNamesProvider).contains(details.data);
+              final entryId = details.data.entryId;
+              final entryType = ref.read(entryTypeProvider(entryId));
+              if (entryType == null) return false;
+              final entryPageType =
+                  ref.read(entryBlueprintPageTypeProvider(entryType));
+              return entryPageType == pageData.type;
             },
             onAcceptWithDetails: (details) {
-              final pageId = details.data;
+              final entryId = details.data.entryId;
+              final fromPageId = ref.read(entryPageIdProvider(entryId));
+              if (fromPageId == null) return;
               ref
-                  .read(pageProvider(pageId))
-                  ?.changeChapter(ref.passing, chapter);
+                  .read(bookProvider.notifier)
+                  .moveEntry(entryId, fromPageId, pageId);
             },
-            builder: (context, candidateData, rejectedData) {
-              return Material(
-                color:
-                    isSelected ? const Color(0xFF1e3f6f) : Colors.transparent,
-                shape: RoundedRectangleBorder(
-                  side: candidateData.isNotEmpty
-                      ? BorderSide(
-                          color: Theme.of(context).colorScheme.primary,
-                          width: 2,
-                        )
-                      : BorderSide.none,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: ContextMenuRegion(
-                  builder: (context) =>
-                      _contextMenuItems(context, ref, isSelected),
-                  child: Draggable<String>(
-                    data: pageId,
-                    feedback: Material(
-                      color: Colors.transparent,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1e3f6f),
-                          borderRadius: BorderRadius.circular(8),
+            builder: (context, entryCandidateData, entryRejectedData) {
+              return DragTarget<PageDrag>(
+                onWillAcceptWithDetails: (details) {
+                  return ref
+                      .read(_pageNamesProvider)
+                      .contains(details.data.pageId);
+                },
+                onAcceptWithDetails: (details) {
+                  final pageId = details.data.pageId;
+                  ref
+                      .read(pageProvider(pageId))
+                      ?.changeChapter(ref.passing, chapter);
+                },
+                builder: (context, pageCandidateData, rejectedData) {
+                  final isAccepting = entryCandidateData.isNotEmpty ||
+                      pageCandidateData.isNotEmpty;
+                  final isRejecting =
+                      entryRejectedData.isNotEmpty || rejectedData.isNotEmpty;
+                  return Material(
+                    color: isSelected
+                        ? const Color(0xFF1e3f6f)
+                        : Colors.transparent,
+                    shape: RoundedRectangleBorder(
+                      side: isAccepting || isRejecting
+                          ? BorderSide(
+                              color: isAccepting
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context).colorScheme.error,
+                              width: 2,
+                            )
+                          : BorderSide.none,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: ContextMenuRegion(
+                      builder: (context) =>
+                          _contextMenuItems(context, ref, isSelected),
+                      child: Draggable<PageDrag>(
+                        data: PageDrag(pageId: pageId),
+                        feedback: Material(
+                          color: Colors.transparent,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1e3f6f),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Row(
+                                children: [
+                                  Iconify(
+                                    pageData.type.icon,
+                                    size: 11,
+                                    color: Colors.white,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    pageId.formatted,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(color: Colors.white),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                         ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: Row(
-                            children: [
-                              Icon(
-                                pageData.type.icon,
-                                size: 11,
-                                color: Colors.white,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                pageId.formatted,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(color: Colors.white),
-                              ),
-                            ],
+                        child: InkWell(
+                          onTap: () {
+                            if (isSelected) return;
+                            ref
+                                .read(appRouter)
+                                .push(PageEditorRoute(id: pageId));
+                          },
+                          borderRadius: BorderRadius.circular(8),
+                          child: Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Row(
+                              children: [
+                                const SizedBox(width: 4),
+                                Iconify(
+                                  pageData.type.icon,
+                                  size: 11,
+                                  color: Colors.white,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    pageId.formatted,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          color: Colors.white,
+                                        ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                const Icon(
+                                  Icons.chevron_right,
+                                  size: 16,
+                                  color: Colors.white,
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
                     ),
-                    child: InkWell(
-                      onTap: () {
-                        if (isSelected) return;
-                        ref.read(appRouter).push(PageEditorRoute(id: pageId));
-                      },
-                      borderRadius: BorderRadius.circular(8),
-                      child: Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Row(
-                          children: [
-                            const SizedBox(width: 4),
-                            Icon(
-                              pageData.type.icon,
-                              size: 11,
-                              color: Colors.white,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                pageId.formatted,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(
-                                      color: Colors.white,
-                                    ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            const Icon(
-                              Icons.chevron_right,
-                              size: 16,
-                              color: Colors.white,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+                  );
+                },
               );
             },
           ),
@@ -536,7 +597,7 @@ class _SmallPageTile extends HookConsumerWidget {
       borderRadius: BorderRadius.circular(8),
       child: Padding(
         padding: const EdgeInsets.all(8.0),
-        child: Icon(
+        child: Iconify(
           pageData.type.icon,
           size: 11,
           color: Colors.white,
@@ -613,14 +674,16 @@ class AddPageDialogue extends HookConsumerWidget {
   const AddPageDialogue({
     this.fixedType,
     this.autoNavigate = true,
+    this.chapter = "",
     super.key,
   });
 
+  final String chapter;
   final PageType? fixedType;
   final bool autoNavigate;
 
   Future<void> _addPage(WidgetRef ref, String name, PageType type) async {
-    await ref.read(bookProvider.notifier).createPage(name, type);
+    await ref.read(bookProvider.notifier).createPage(name, type, chapter);
 
     if (!autoNavigate) return;
     unawaited(ref.read(appRouter).push(PageEditorRoute(id: name)));
@@ -662,7 +725,7 @@ class AddPageDialogue extends HookConsumerWidget {
             value: "",
             controller: controller,
             name: "Page Name",
-            icon: FontAwesomeIcons.book,
+            icon: TWIcons.book,
             validator: (value) {
               final validation = _validateName(value, pagesNames);
               isNameValid.value = validation == null;
@@ -682,7 +745,7 @@ class AddPageDialogue extends HookConsumerWidget {
               builder: (context, value) {
                 return Row(
                   children: [
-                    Icon(value.icon, size: 18),
+                    Iconify(value.icon, size: 18),
                     const SizedBox(width: 8),
                     Text(value.name.formatted),
                   ],
@@ -696,7 +759,7 @@ class AddPageDialogue extends HookConsumerWidget {
       ),
       actions: [
         TextButton.icon(
-          icon: const Icon(FontAwesomeIcons.xmark),
+          icon: const Iconify(TWIcons.x),
           label: const Text("Cancel"),
           style: TextButton.styleFrom(
             foregroundColor: Theme.of(context).textTheme.bodySmall?.color,
@@ -712,7 +775,7 @@ class AddPageDialogue extends HookConsumerWidget {
                   navigator.pop(controller.text);
                 },
           label: const Text("Add"),
-          icon: const Icon(FontAwesomeIcons.plus),
+          icon: const Iconify(TWIcons.plus),
         ),
       ],
     );
@@ -765,7 +828,7 @@ class RenamePageDialogue extends HookConsumerWidget {
         value: old,
         controller: controller,
         name: "Page Name",
-        icon: FontAwesomeIcons.book,
+        icon: TWIcons.book,
         validator: (value) {
           final validation = _validateName(value, pagesNames);
           isNameValid.value = validation == null;
@@ -784,7 +847,7 @@ class RenamePageDialogue extends HookConsumerWidget {
       ),
       actions: [
         TextButton.icon(
-          icon: const Icon(FontAwesomeIcons.xmark),
+          icon: const Iconify(TWIcons.x),
           label: const Text("Cancel"),
           style: TextButton.styleFrom(
             foregroundColor: Theme.of(context).textTheme.bodySmall?.color,
@@ -800,7 +863,7 @@ class RenamePageDialogue extends HookConsumerWidget {
                   navigator.pop(true);
                 },
           label: const Text("Rename"),
-          icon: const Icon(FontAwesomeIcons.pen),
+          icon: const Iconify(TWIcons.pencil),
           color: Colors.orange,
         ),
       ],
@@ -847,7 +910,7 @@ class ChangeChapterDialogue extends HookConsumerWidget {
         focus: focusNode,
         text: chapter,
         hintText: "Chapter Name",
-        icon: FontAwesomeIcons.book,
+        icon: TWIcons.book,
         inputFormatters: [
           TextInputFormatter.withFunction(
             (oldValue, newValue) => newValue.copyWith(
@@ -866,7 +929,7 @@ class ChangeChapterDialogue extends HookConsumerWidget {
       ),
       actions: [
         TextButton.icon(
-          icon: const Icon(FontAwesomeIcons.xmark),
+          icon: const Iconify(TWIcons.x),
           label: const Text("Cancel"),
           style: TextButton.styleFrom(
             foregroundColor: Theme.of(context).textTheme.bodySmall?.color,
@@ -881,7 +944,77 @@ class ChangeChapterDialogue extends HookConsumerWidget {
             changed,
           ),
           label: const Text("Change"),
-          icon: const Icon(FontAwesomeIcons.pen),
+          icon: const Iconify(TWIcons.pencil),
+          color: Colors.orange,
+        ),
+      ],
+    );
+  }
+}
+
+class ChangePagePriorityDialogue extends HookConsumerWidget {
+  const ChangePagePriorityDialogue({
+    required this.pageId,
+    super.key,
+  });
+
+  final String pageId;
+
+  Future<void> _changePriority(
+    BuildContext context,
+    PassingRef ref,
+    int newPriority,
+    ValueNotifier<bool> changed,
+  ) async {
+    if (changed.value) return;
+    changed.value = true;
+
+    final navigator = Navigator.of(context);
+    await ref.read(pageProvider(pageId))?.changePriority(ref, newPriority);
+    navigator.pop(true);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final priority = ref.watch(pagePriorityProvider(pageId));
+    final controller = useTextEditingController();
+    final focusNode = useFocusNode();
+    final changed = useState(false);
+
+    useDelayedExecution(focusNode.requestFocus);
+
+    return AlertDialog(
+      title: Text("Change priority of ${pageId.formatted}"),
+      content: FormattedTextField(
+        controller: controller,
+        focus: focusNode,
+        text: priority.toString(),
+        hintText: "Priority",
+        icon: TWIcons.book,
+        inputFormatters: [
+          FilteringTextInputFormatter.digitsOnly,
+        ],
+        onSubmitted: (value) async =>
+            _changePriority(context, ref.passing, int.parse(value), changed),
+      ),
+      actions: [
+        TextButton.icon(
+          icon: const Iconify(TWIcons.x),
+          label: const Text("Cancel"),
+          style: TextButton.styleFrom(
+            foregroundColor: Theme.of(context).textTheme.bodySmall?.color,
+          ),
+          onPressed: () => Navigator.of(context).pop(false),
+        ),
+        FilledButton.icon(
+          onPressed: () async => _changePriority(
+            context,
+            ref.passing,
+            int.parse(controller.text),
+            changed,
+          ),
+          label: const Text("Change"),
+          icon: const Iconify(TWIcons.pencil),
           color: Colors.orange,
         ),
       ],
@@ -901,7 +1034,7 @@ Future<bool> showPageDeletionDialogue(
         "This will delete the page and all its content.\nTHIS CANNOT BE UNDONE.",
     delayConfirm: 3.seconds,
     confirmText: "Delete",
-    confirmIcon: FontAwesomeIcons.trash,
+    confirmIcon: TWIcons.trash,
     onConfirm: () async {
       await ref.read(bookProvider.notifier).deletePage(pageId);
       unawaited(
@@ -909,4 +1042,12 @@ Future<bool> showPageDeletionDialogue(
       );
     },
   );
+}
+
+class PageDrag {
+  const PageDrag({
+    required this.pageId,
+  });
+
+  final String pageId;
 }

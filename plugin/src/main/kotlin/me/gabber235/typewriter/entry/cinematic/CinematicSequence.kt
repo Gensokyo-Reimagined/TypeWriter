@@ -1,27 +1,28 @@
 package me.gabber235.typewriter.entry.cinematic
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import me.gabber235.typewriter.entry.Ref
+import me.gabber235.typewriter.entry.TriggerableEntry
 import me.gabber235.typewriter.entry.entries.CinematicAction
 import me.gabber235.typewriter.entry.entries.SystemTrigger.CINEMATIC_END
 import me.gabber235.typewriter.entry.triggerEntriesFor
 import me.gabber235.typewriter.entry.triggerFor
 import me.gabber235.typewriter.events.AsyncCinematicEndEvent
+import me.gabber235.typewriter.events.AsyncCinematicStartEvent
 import me.gabber235.typewriter.events.AsyncCinematicTickEvent
-import me.gabber235.typewriter.interaction.startBlockingActionBar
-import me.gabber235.typewriter.interaction.startBlockingMessages
-import me.gabber235.typewriter.interaction.stopBlockingActionBar
-import me.gabber235.typewriter.interaction.stopBlockingMessages
+import me.gabber235.typewriter.interaction.*
+import me.gabber235.typewriter.utils.ThreadType.DISPATCHERS_ASYNC
 import org.bukkit.entity.Player
+import org.koin.java.KoinJavaComponent
 import java.util.*
 
 private const val STARTING_FRAME = -1
 private const val ENDED_FRAME = -2
 
 class CinematicSequence(
+    val pageId: String,
     private val player: Player,
     private val actions: List<CinematicAction>,
-    private val triggers: List<String>,
+    private val triggers: List<Ref<TriggerableEntry>>,
     private val minEndTime: Optional<Int>,
 ) {
     private var frame = STARTING_FRAME
@@ -38,6 +39,10 @@ class CinematicSequence(
             } catch (e: Exception) {
                 e.printStackTrace()
             }
+        }
+
+        DISPATCHERS_ASYNC.switchContext {
+            AsyncCinematicStartEvent(player, pageId).callEvent()
         }
     }
 
@@ -79,12 +84,20 @@ class CinematicSequence(
             }
         }
 
-        if (!force) {
-            triggers triggerEntriesFor player
-        }
+        if (force) return
+        triggers triggerEntriesFor player
 
-        withContext(Dispatchers.IO) {
-            AsyncCinematicEndEvent(player, originalFrame).callEvent()
+        DISPATCHERS_ASYNC.switchContext {
+            AsyncCinematicEndEvent(player, originalFrame, pageId).callEvent()
         }
     }
 }
+
+private val Player.cinematicSequence: CinematicSequence?
+    get() = with(KoinJavaComponent.get<InteractionHandler>(InteractionHandler::class.java)) {
+        interaction?.cinematic
+    }
+
+fun Player.isPlayingCinematic(pageId: String): Boolean = cinematicSequence?.pageId == pageId
+
+fun Player.isPlayingCinematic(): Boolean = cinematicSequence != null

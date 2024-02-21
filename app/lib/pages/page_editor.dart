@@ -2,7 +2,6 @@ import "package:auto_route/auto_route.dart";
 import "package:collection/collection.dart";
 import "package:flutter/material.dart" hide Page, SearchBar;
 import "package:flutter/services.dart";
-import "package:font_awesome_flutter/font_awesome_flutter.dart";
 import "package:hooks_riverpod/hooks_riverpod.dart";
 import "package:riverpod_annotation/riverpod_annotation.dart";
 import "package:typewriter/app_router.dart";
@@ -12,15 +11,17 @@ import "package:typewriter/models/page.dart";
 import "package:typewriter/models/staging.dart";
 import "package:typewriter/models/writers.dart";
 import "package:typewriter/utils/extensions.dart";
+import "package:typewriter/utils/icons.dart";
 import "package:typewriter/utils/smart_single_activator.dart";
 import "package:typewriter/widgets/components/app/cinematic_view.dart";
 import "package:typewriter/widgets/components/app/entries_graph.dart";
+import "package:typewriter/widgets/components/app/manifest_view.dart";
 import "package:typewriter/widgets/components/app/search_bar.dart";
-import "package:typewriter/widgets/components/app/select_entries.dart";
 import "package:typewriter/widgets/components/app/staging.dart";
 import "package:typewriter/widgets/components/app/static_entries_list.dart";
 import "package:typewriter/widgets/components/app/writers.dart";
 import "package:typewriter/widgets/components/general/always_focused.dart";
+import "package:typewriter/widgets/components/general/iconify.dart";
 import "package:typewriter/widgets/components/general/shortcut_label.dart";
 import "package:typewriter/widgets/inspector/inspector.dart";
 
@@ -155,26 +156,19 @@ class _AppBar extends HookConsumerWidget {
       child: Row(
         children: [
           const SizedBox(width: 20),
-          FaIcon(pageType?.icon, size: 16),
+          Iconify(pageType?.icon, size: 16),
           const SizedBox(width: 8),
           Text(ref.watch(currentPageLabelProvider)),
           const SizedBox(width: 5),
           const Spacer(),
-          // When selecting entries, we want to disable these interactions
-          SelectingEntriesBlocker(
-            child: Row(
-              children: [
-                Writers(writers: ref.watch(_writersProvider)),
-                const SizedBox(width: 20),
-                const StagingIndicator(key: Key("staging-indicator")),
-                const SizedBox(width: 20),
-                const _SearchBar(),
-                const SizedBox(width: 5),
-                const _AddEntryButton(),
-                const SizedBox(width: 10),
-              ],
-            ),
-          ),
+          Writers(writers: ref.watch(_writersProvider)),
+          const SizedBox(width: 20),
+          const StagingIndicator(key: Key("staging-indicator")),
+          const SizedBox(width: 20),
+          const _SearchBar(),
+          const SizedBox(width: 5),
+          const _AddEntryButton(),
+          const SizedBox(width: 10),
         ],
       ),
     );
@@ -195,8 +189,8 @@ class _SearchBar extends HookConsumerWidget {
             padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
             child: Row(
               children: [
-                const Icon(
-                  FontAwesomeIcons.magnifyingGlass,
+                const Iconify(
+                  TWIcons.magnifyingGlass,
                   size: 16,
                   color: Colors.grey,
                 ),
@@ -224,7 +218,7 @@ class _AddEntryButton extends HookConsumerWidget {
     return IconButton(
       iconSize: 16,
       padding: EdgeInsets.zero,
-      icon: const Icon(FontAwesomeIcons.plus),
+      icon: const Iconify(TWIcons.plus),
       onPressed: () => ref.read(searchProvider.notifier).startAddSearch(),
     );
   }
@@ -235,23 +229,13 @@ class _Inspector extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isSelectingEntries = ref.watch(isSelectingEntriesProvider);
-
-    // When we are selecting entries, we want a special inspector that allows
-    // us to select entries.
-    if (isSelectingEntries) {
-      return const EntriesSelectorInspector();
-    }
-
     final pageType = ref.watch(currentPageTypeProvider);
     if (pageType == null) {
       return const SizedBox();
     }
 
     switch (pageType) {
-      case PageType.sequence:
-        return const GenericInspector();
-      case PageType.static:
+      case PageType.sequence || PageType.static || PageType.manifest:
         return const GenericInspector();
       case PageType.cinematic:
         return const CinematicInspector();
@@ -276,6 +260,8 @@ class _PageContent extends HookConsumerWidget {
         return const StaticEntriesList();
       case PageType.cinematic:
         return const CinematicView();
+      case PageType.manifest:
+        return const ManifestView();
     }
   }
 }

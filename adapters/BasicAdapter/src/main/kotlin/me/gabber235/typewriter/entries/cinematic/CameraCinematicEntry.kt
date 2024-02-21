@@ -1,33 +1,37 @@
 package me.gabber235.typewriter.entries.cinematic
 
-import com.github.shynixn.mccoroutine.bukkit.minecraftDispatcher
-import kotlinx.coroutines.withContext
-import lirand.api.extensions.server.server
+import com.github.retrooper.packetevents.protocol.entity.type.EntityTypes
+import com.github.retrooper.packetevents.protocol.packettype.PacketType
 import me.gabber235.typewriter.adapters.Colors
 import me.gabber235.typewriter.adapters.Entry
-import me.gabber235.typewriter.adapters.modifiers.InnerMin
-import me.gabber235.typewriter.adapters.modifiers.Min
-import me.gabber235.typewriter.adapters.modifiers.Segments
-import me.gabber235.typewriter.adapters.modifiers.WithRotation
+import me.gabber235.typewriter.adapters.modifiers.*
 import me.gabber235.typewriter.entry.Criteria
 import me.gabber235.typewriter.entry.entries.*
-import me.gabber235.typewriter.extensions.protocollib.BoatType
-import me.gabber235.typewriter.extensions.protocollib.ClientEntity
-import me.gabber235.typewriter.extensions.protocollib.spectateEntity
-import me.gabber235.typewriter.extensions.protocollib.stopSpectatingEntity
+import me.gabber235.typewriter.extensions.packetevents.meta
+import me.gabber235.typewriter.extensions.packetevents.spectateEntity
+import me.gabber235.typewriter.extensions.packetevents.stopSpectatingEntity
+import me.gabber235.typewriter.extensions.packetevents.toPacketLocation
+import me.gabber235.typewriter.interaction.blockPacket
+import me.gabber235.typewriter.interaction.unblockPacket
 import me.gabber235.typewriter.logger
 import me.gabber235.typewriter.plugin
 import me.gabber235.typewriter.utils.*
 import me.gabber235.typewriter.utils.GenericPlayerStateProvider.*
+import me.gabber235.typewriter.utils.ThreadType.SYNC
+import me.tofaa.entitylib.EntityLib
+import me.tofaa.entitylib.meta.display.TextDisplayMeta
+import me.tofaa.entitylib.spigot.SpigotEntityLibAPI
+import me.tofaa.entitylib.wrapper.WrapperEntity
+import org.bukkit.GameMode
 import org.bukkit.Location
 import org.bukkit.Particle
-import org.bukkit.entity.EntityType
 import org.bukkit.entity.Player
 import org.bukkit.potion.PotionEffect
 import org.bukkit.potion.PotionEffect.INFINITE_DURATION
 import org.bukkit.potion.PotionEffectType.INVISIBILITY
+import java.util.*
 
-@Entry("camera_cinematic", "Create a cinematic camera path", Colors.CYAN, Icons.VIDEO)
+@Entry("camera_cinematic", "Create a cinematic camera path", Colors.CYAN, "fa6-solid:video")
 /**
  * The `Camera Cinematic` entry is used to create a cinematic camera path.
  *
@@ -45,7 +49,7 @@ class CameraCinematicEntry(
     override val id: String = "",
     override val name: String = "",
     override val criteria: List<Criteria> = emptyList(),
-    @Segments(icon = Icons.VIDEO)
+    @Segments(icon = "fa6-solid:video")
     @InnerMin(Min(10))
     val segments: List<CameraSegment> = emptyList(),
 ) : CinematicEntry {
@@ -73,36 +77,62 @@ data class CameraSegment(
 
 data class PathPoint(
     @WithRotation
-    val location: Location,
+    val location: Location = Location(null, 0.0, 0.0, 0.0),
+    @Help("The duration of the path point in frames.")
+    /**
+     * The duration of the path point in frames.
+     * If not set,
+     * the duration will be calculated based on the total duration and the number of path points
+     * that don't have a duration.
+     */
+    val duration: Optional<Int> = Optional.empty(),
 )
 
 class CameraCinematicAction(
     private val player: Player,
     private val entry: CameraCinematicEntry,
 ) : CinematicAction {
-    private var segments = emptyList<CameraSegmentAction>()
+    private var previousSegment: CameraSegment? = null
+    private lateinit var action: CameraAction
 
-    private var currentSegmentAction: CameraSegmentAction? = null
     private var originalState: PlayerState? = null
 
     override suspend fun setup() {
-        super.setup()
-
-        segments = entry.segments.mapNotNull { segment ->
-            if (segment.path.isEmpty()) {
-                logger.warning("Camera segment has no path in ${entry.id}, skipping.")
-                return@mapNotNull null
-            }
-            if (player.isFloodgate) {
-                TeleportCameraSegmentAction(player, segment)
-            } else {
-                val hasSegmentBefore = entry.segments.any { it isActiveAt (segment.startFrame - 1) }
-                BoatCameraSegmentAction(player, segment, hasSegmentBefore)
-            }
+        action = if (player.isFloodgate) {
+            TeleportCameraAction(player)
+        } else {
+            DisplayCameraAction(player)
         }
-        segments.forEach { it.setup() }
+        super.setup()
+    }
 
-        originalState = player.state(
+    override suspend fun tick(frame: Int) {
+        super.tick(frame)
+
+        val segment = (entry.segments activeSegmentAt frame)
+
+        if (segment != previousSegment) {
+            if (previousSegment == null && segment != null) {
+                player.setup()
+                action.startSegment(segment)
+            } else if (segment != null) {
+                action.switchSegment(segment)
+            } else {
+                action.stop()
+                player.teardown()
+            }
+
+            previousSegment = segment
+        }
+
+        if (segment != null) {
+            val baseFrame = frame - segment.startFrame
+            action.tickSegment(baseFrame)
+        }
+    }
+
+    private suspend fun Player.setup() {
+        if (originalState == null) originalState = state(
             LOCATION,
             ALLOW_FLIGHT,
             FLYING,
@@ -111,73 +141,53 @@ class CameraCinematicAction(
             EffectStateProvider(INVISIBILITY)
         )
 
-        withContext(plugin.minecraftDispatcher) {
-            player.allowFlight = true
-            player.isFlying = true
-            player.addPotionEffect(PotionEffect(INVISIBILITY, INFINITE_DURATION, 0, false, false))
-            server.onlinePlayers.forEach {
-                it.hidePlayer(plugin, player)
-                player.hidePlayer(plugin, it)
+        SYNC.switchContext {
+            allowFlight = true
+            isFlying = true
+            addPotionEffect(PotionEffect(INVISIBILITY, INFINITE_DURATION, 0, false, false))
+            lirand.api.extensions.server.server.onlinePlayers.forEach {
+                it.hidePlayer(plugin, this)
+                this.hidePlayer(plugin, it)
+            }
+
+            // In creative mode, when the player opens the inventory while their inventory is fake cleared,
+            // The actual inventory will be cleared.
+            // To prevent this, we only fake clear the inventory when the player is not in creative mode.
+            if (gameMode != GameMode.CREATIVE) {
+                fakeClearInventory()
             }
         }
+
+        this blockPacket PacketType.Play.Client.CLICK_WINDOW
+        this blockPacket PacketType.Play.Client.CLICK_WINDOW_BUTTON
+        this blockPacket PacketType.Play.Client.USE_ITEM
+        this blockPacket PacketType.Play.Client.INTERACT_ENTITY
     }
 
-    override suspend fun tick(frame: Int) {
-        super.tick(frame)
-
-        segments.filter { it.canPrepare(frame) }.forEach {
-            it.prepare()
+    private suspend fun Player.teardown() {
+        originalState?.let {
+            SYNC.switchContext {
+                restore(it)
+                if (gameMode != GameMode.CREATIVE) {
+                    restoreInventory()
+                }
+            }
         }
+        originalState = null
 
-
-        if (currentSegmentAction?.isActiveAt(frame) == false) {
-            currentSegmentAction?.stop()
-            currentSegmentAction = null
-        }
-
-        if (currentSegmentAction == null) {
-            currentSegmentAction = findSegmentAction(frame)
-            currentSegmentAction?.start()
-        }
-
-        currentSegmentAction?.tick(frame)
+        this unblockPacket PacketType.Play.Client.CLICK_WINDOW
+        this unblockPacket PacketType.Play.Client.CLICK_WINDOW_BUTTON
+        this unblockPacket PacketType.Play.Client.USE_ITEM
+        this unblockPacket PacketType.Play.Client.INTERACT_ENTITY
     }
-
-    private fun findSegmentAction(frame: Int): CameraSegmentAction? {
-        return segments.firstOrNull { it isActiveAt frame }
-    }
-
 
     override suspend fun teardown() {
         super.teardown()
-
-        currentSegmentAction?.stop()
-        currentSegmentAction = null
-
-        segments.forEach { it.teardown() }
-        segments = emptyList()
-
-        originalState?.let {
-            withContext(plugin.minecraftDispatcher) {
-                player.restore(it)
-            }
-        }
+        action.stop()
+        player.teardown()
     }
 
     override fun canFinish(frame: Int): Boolean = entry.segments canFinishAt frame
-}
-
-
-private interface CameraSegmentAction {
-    val segment: CameraSegment
-    fun setup()
-    suspend fun prepare()
-    fun canPrepare(frame: Int): Boolean
-    suspend fun start()
-    suspend fun tick(frame: Int)
-    fun stop()
-    fun teardown()
-    infix fun isActiveAt(frame: Int): Boolean = segment isActiveAt frame
 }
 
 // The max distance the entity can be from the player before it gets teleported.
@@ -195,148 +205,137 @@ private suspend inline fun Player.teleportIfNeeded(
     frame: Int,
     location: Location,
 ) {
-    if (frame % 10 == 0 || location.distanceSquared(location) > MAX_DISTANCE_SQUARED) withContext(
-        plugin.minecraftDispatcher
-    ) {
-        teleport(location.clone().apply {
-            y += 10
-        })
+    if (frame % 10 == 0 || location.distanceSquared(location) > MAX_DISTANCE_SQUARED) SYNC.switchContext {
+        teleport(location)
         allowFlight = true
         isFlying = true
     }
 }
 
+private data class PointSegment(
+    override val startFrame: Int,
+    override val endFrame: Int,
+    val location: Location,
+) : Segment
 
-private class BoatCameraSegmentAction(
-    private val player: Player,
-    override val segment: CameraSegment,
-    private val hasSegmentBefore: Boolean,
-) : CameraSegmentAction {
+private interface CameraAction {
+    suspend fun startSegment(segment: CameraSegment)
+    suspend fun tickSegment(frame: Int)
+    suspend fun switchSegment(newSegment: CameraSegment)
+    suspend fun stop()
+}
+
+private class DisplayCameraAction(
+    val player: Player,
+) : CameraAction {
+    private var entity = createEntity()
+    private var path = emptyList<PointSegment>()
+
     companion object {
-        // As a boat is interpolated. We need the remove the last few frames to make sure the animation fully finishes.
-        private const val TRAILING_FRAMES = 10
-
-        // The amount of ticks the boat gets to prepare before the player is teleported to it.
-        private const val PREPARE_TICKS = 10
-
-        private const val BOAT_HEIGHT = 0.5625
+        private const val BASE_INTERPOLATION = 10
     }
 
-    private val path = segment.path.map {
-        it.copy(
-            location = it.location.clone().apply { y += player.eyeHeight - BOAT_HEIGHT }
-        )
-    }
-    private val firstLocation = path.first().location
-
-    private val farAwayLocation = firstLocation.highUpLocation
-
-    private val startLocation
-        get() = if (segment.startFrame > PREPARE_TICKS && hasSegmentBefore) farAwayLocation else firstLocation
-
-    private val entity = ClientEntity(startLocation, EntityType.BOAT).also {
-        it.boatType = BoatType.JUNGLE
+    private fun createEntity(): WrapperEntity {
+        return EntityLib.getApi<SpigotEntityLibAPI>().createEntity<WrapperEntity>(EntityTypes.TEXT_DISPLAY)
+            .meta<TextDisplayMeta> {
+                positionRotationInterpolationDuration = BASE_INTERPOLATION
+            }
     }
 
-    override fun setup() {
-        entity.addViewer(player)
-    }
-
-    override suspend fun prepare() {
-        entity.move(firstLocation)
-
-        // If the player is up in the sky, we know that they can't see land.
-        // As such, we can teleport them to the x/z of the first location.
-        if (player.isHighUp) {
-            val location = firstLocation.highUpLocation
-            withContext(plugin.minecraftDispatcher) {
-                player.teleport(location)
+    private fun setupPath(segment: CameraSegment) {
+        path = segment.path.transform(segment.duration - BASE_INTERPOLATION) {
+            it.clone().apply {
+                y += player.eyeHeight
             }
         }
     }
 
-    override fun canPrepare(frame: Int): Boolean {
-        return segment.startFrame - PREPARE_TICKS == frame
+    override suspend fun startSegment(segment: CameraSegment) {
+        setupPath(segment)
+
+        SYNC.switchContext {
+            player.teleport(path.first().location)
+        }
+
+        entity.spawn(path.first().location.toPacketLocation())
+        entity.addViewer(player.uniqueId)
+        player.spectateEntity(entity)
     }
 
-    override suspend fun start() {
-        withContext(plugin.minecraftDispatcher) {
-            // Teleport the player to the first location.
-            // We need to use the unmodified location here.
-            // Otherwise, the player will be shifted when spectating.
-            val firstNormalLocation = segment.path.first().location
-            player.teleport(firstNormalLocation)
+    override suspend fun tickSegment(frame: Int) {
+        val location = path.interpolate(frame)
+        entity.rotateHead(location.yaw, location.pitch)
+        entity.teleport(location.toPacketLocation())
+        player.teleportIfNeeded(frame, location)
+    }
+
+    override suspend fun switchSegment(newSegment: CameraSegment) {
+        val oldWorld = path.first().location.world.uid
+        val newWorld = newSegment.path.first().location.world.uid
+
+        setupPath(newSegment)
+        if (oldWorld == newWorld) {
+            switchSeamless()
+        } else {
+            switchWithStop()
+        }
+    }
+
+    private suspend fun switchSeamless() {
+        val newEntity = createEntity()
+        newEntity.spawn(path.first().location.toPacketLocation())
+        newEntity.addViewer(player.uniqueId)
+
+        SYNC.switchContext {
+            player.teleport(path.first().location)
+            player.spectateEntity(newEntity)
+        }
+
+        entity.despawn()
+        entity.remove()
+        entity = newEntity
+    }
+
+    private suspend fun switchWithStop() {
+        player.stopSpectatingEntity()
+        entity.despawn()
+        entity.addViewer(player.uniqueId)
+        SYNC.switchContext {
+            player.teleport(path.first().location)
+            entity.spawn(path.first().location.toPacketLocation())
             player.spectateEntity(entity)
         }
     }
 
-    override suspend fun tick(frame: Int) {
-        val percentage = percentage(frame)
-        val location = path.interpolate(percentage)
-
-        entity.move(location)
-        player.teleportIfNeeded(frame, location)
-    }
-
-    private fun percentage(frame: Int): Double {
-        val totalFrames = segment.endFrame - segment.startFrame - TRAILING_FRAMES
-        val currentFrame = frame - segment.startFrame
-        return (currentFrame.toDouble() / totalFrames).coerceIn(0.0, 1.0)
-    }
-
-    override fun stop() {
+    override suspend fun stop() {
         player.stopSpectatingEntity()
-        entity.move(farAwayLocation)
-    }
-
-    override fun teardown() {
-        entity.removeViewer(player)
+        entity.despawn()
+        entity.remove()
     }
 }
 
-private class TeleportCameraSegmentAction(
+private class TeleportCameraAction(
     private val player: Player,
-    override val segment: CameraSegment,
-) : CameraSegmentAction {
-    private val firstLocation = segment.path.first().location
+) : CameraAction {
+    private var path = emptyList<PointSegment>()
 
-    override fun setup() {
+    override suspend fun startSegment(segment: CameraSegment) {
+        path = segment.path.transform(segment.duration, Location::clone)
     }
 
-    override suspend fun prepare() {
-    }
-
-    override fun canPrepare(frame: Int): Boolean {
-        return segment.startFrame - 10 == frame
-    }
-
-    override suspend fun start() {
-        withContext(plugin.minecraftDispatcher) {
-            player.teleport(firstLocation)
-        }
-    }
-
-    override suspend fun tick(frame: Int) {
-        val percentage = percentage(frame)
-        val location = segment.path.interpolate(percentage)
-        withContext(plugin.minecraftDispatcher) {
+    override suspend fun tickSegment(frame: Int) {
+        val location = path.interpolate(frame)
+        SYNC.switchContext {
             player.teleport(location)
             player.allowFlight = true
             player.isFlying = true
         }
     }
 
-
-    private fun percentage(frame: Int): Double {
-        val totalFrames = segment.endFrame - segment.startFrame
-        val currentFrame = frame - segment.startFrame
-        return (currentFrame.toDouble() / totalFrames).coerceIn(0.0, 1.0)
+    override suspend fun switchSegment(newSegment: CameraSegment) {
     }
 
-    override fun stop() {
-    }
-
-    override fun teardown() {
+    override suspend fun stop() {
     }
 }
 
@@ -345,12 +344,20 @@ class SimulatedCameraCinematicAction(
     private val entry: CameraCinematicEntry,
 ) : CinematicAction {
 
+    private val paths = entry.segments.associateWith { segment ->
+        segment.path.transform(segment.duration) {
+            it.clone().apply {
+                y += player.eyeHeight
+            }
+        }
+    }
+
     override suspend fun tick(frame: Int) {
         super.tick(frame)
 
         val segment = (entry.segments activeSegmentAt frame) ?: return
-        val percentage = segment.percentageAt(frame)
-        val location = segment.path.interpolate(percentage)
+        val path = paths[segment] ?: return
+        val location = path.interpolate(frame - segment.startFrame)
 
         // Display a particle at the location
         player.spawnParticle(Particle.SCRAPE, location, 1)
@@ -359,20 +366,86 @@ class SimulatedCameraCinematicAction(
     override fun canFinish(frame: Int): Boolean = entry.segments canFinishAt frame
 }
 
+private fun List<PathPoint>.transform(
+    totalDuration: Int,
+    locationTransformer: (Location) -> Location
+): List<PointSegment> {
+    if (isEmpty()) {
+        throw IllegalArgumentException("The path points cannot be empty.")
+    }
+
+    if (size == 1) {
+        val pathPoint = first()
+        val location = pathPoint.location.run(locationTransformer)
+        return listOf(PointSegment(0, totalDuration, location))
+    }
+
+
+    val allocatedDuration = sumOf { it.duration.orElse(0) }
+    if (allocatedDuration > totalDuration) {
+        throw IllegalArgumentException("The total duration of the path points is greater than the total duration of the cinematic.")
+    }
+
+    val remainingDuration = totalDuration - allocatedDuration
+
+    // The last segment should never have a duration. As the last segment will be reached when the cinematic ends.
+    val leftSegments = take(size - 1).count { it.duration.isEmpty }
+
+    if (leftSegments == 0) {
+        if (remainingDuration > 0) {
+            logger.warning("The sum duration of the path points is less than the total duration of the cinematic. The remaining duration will be still frames.")
+        }
+
+        var currentFrame = 0
+        return map {
+            val endFrame = currentFrame + it.duration.orElse(0)
+            val segment = PointSegment(currentFrame, endFrame, it.location.run(locationTransformer))
+            currentFrame = endFrame
+            segment
+        }
+    }
+
+    val durationPerSegment = remainingDuration / leftSegments
+    var leftOverDuration = remainingDuration % leftSegments
+
+    var currentFrame = 0
+
+    return map { pathPoint ->
+        val duration = pathPoint.duration.orElseGet {
+            if (leftOverDuration > 0) {
+                leftOverDuration--
+                durationPerSegment + 1
+            } else {
+                durationPerSegment
+            }
+        }
+        val endFrame = currentFrame + duration
+        val segment = PointSegment(currentFrame, endFrame, pathPoint.location.run(locationTransformer))
+        currentFrame = endFrame
+        segment
+    }
+}
+
 /**
  * Use catmull-rom interpolation to get a point between a list of points.
  */
-fun List<PathPoint>.interpolate(percentage: Double): Location {
-    val currentPart = percentage * (size - 1)
-    val index = currentPart.toInt()
-    val subPercentage = currentPart - index
+private fun List<PointSegment>.interpolate(frame: Int): Location {
+    val index = indexOfFirst { it isActiveAt frame }
+    if (index == -1) {
+        return last().location
+    }
 
-    val previousPoint = getOrNull(index - 1)?.location ?: this[index].location
-    val currentPoint = this[index].location
-    val nextPoint = getOrNull(index + 1)?.location ?: currentPoint
-    val nextNextPoint = getOrNull(index + 2)?.location ?: nextPoint
+    val segment = this[index]
+    val totalFrames = segment.endFrame - segment.startFrame
+    val currentFrame = frame - segment.startFrame
+    val percentage = currentFrame.toDouble() / totalFrames
 
-    return interpolatePoints(previousPoint, currentPoint, nextPoint, nextNextPoint, subPercentage)
+    val currentLocation = segment.location
+    val previousLocation = getOrNull(index - 1)?.location ?: currentLocation
+    val nextLocation = getOrNull(index + 1)?.location ?: currentLocation
+    val nextNextLocation = getOrNull(index + 2)?.location ?: nextLocation
+
+    return interpolatePoints(previousLocation, currentLocation, nextLocation, nextNextLocation, percentage)
 }
 
 /**
