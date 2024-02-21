@@ -142,6 +142,7 @@ private val computers: List<ModifierComputer> by lazy {
         HelpModifierComputer,
         SnakeCaseModifierComputer,
         MultiLineModifierComputer,
+        OnlyTagsModifierComputer,
         MaterialPropertiesModifierComputer,
         WithRotationModifierComputer,
         SegmentModifierComputer,

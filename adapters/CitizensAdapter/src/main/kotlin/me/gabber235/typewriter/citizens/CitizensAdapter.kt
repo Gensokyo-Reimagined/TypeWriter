@@ -24,6 +24,7 @@ import java.lang.reflect.Field
 import java.util.*
 import java.util.regex.Pattern
 
+@Deprecated("Use the EntityAdapter instead")
 @Adapter("Citizens", "For the Citizens plugin", App.VERSION)
 /**
  * The Citizens adapter allows you to create custom interactions with NPCs.
