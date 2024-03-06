@@ -6,6 +6,7 @@ import me.gabber235.typewriter.entry.entries.AudienceFilterEntry
 import me.gabber235.typewriter.entry.entries.PropertySupplier
 import me.gabber235.typewriter.entry.entries.TickableDisplay
 import me.gabber235.typewriter.utils.config
+import org.bukkit.Location
 import org.bukkit.entity.Player
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
@@ -14,22 +15,23 @@ val entityShowRange by config("entity.show-range", 50.0, "The range at which ent
 
 class CommonActivityEntityDisplay(
     ref: Ref<out AudienceFilterEntry>,
-    private val creator: EntityCreator,
+    override val creator: EntityCreator,
     private val activityCreators: List<ActivityCreator>,
     private val suppliers: List<Pair<PropertySupplier<*>, Int>>,
-) : AudienceFilter(ref), TickableDisplay {
+    private val spawnLocation: Location,
+) : AudienceFilter(ref), TickableDisplay, ActivityEntityDisplay {
     private var activityManager: ActivityManager? = null
     private val entities = ConcurrentHashMap<UUID, DisplayEntity>()
 
     override fun filter(player: Player): Boolean {
         val npcLocation = activityManager?.location ?: return false
-        if (player.location.world.uid != npcLocation.world.uid) return false
-        return player.location.distanceSquared(npcLocation) <= entityShowRange * entityShowRange
+        val distance = npcLocation.distanceSquared(player.location) ?: return false
+        return distance <= entityShowRange * entityShowRange
     }
 
     override fun initialize() {
         super.initialize()
-        activityManager = ActivityManager(activityCreators.map { it.create(null) })
+        activityManager = ActivityManager(activityCreators.map { it.create(null) }, spawnLocation)
     }
 
     override fun onPlayerFilterAdded(player: Player) {
@@ -58,5 +60,9 @@ class CommonActivityEntityDisplay(
         entities.clear()
         activityManager?.dispose()
         activityManager = null
+    }
+
+    override fun playerHasEntity(playerId: UUID, entityId: Int): Boolean {
+        return entities[playerId]?.contains(entityId) ?: false
     }
 }

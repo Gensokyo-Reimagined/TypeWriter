@@ -5,11 +5,11 @@ import me.gabber235.typewriter.adapters.Entry
 import me.gabber235.typewriter.adapters.modifiers.Help
 import me.gabber235.typewriter.entry.Ref
 import me.gabber235.typewriter.entry.entity.FakeEntity
+import me.gabber235.typewriter.entry.entity.LocationProperty
 import me.gabber235.typewriter.entry.entries.EntityData
 import me.gabber235.typewriter.entry.entries.EntityDefinitionEntry
 import me.gabber235.typewriter.entry.entries.EntityProperty
 import me.gabber235.typewriter.utils.Sound
-import org.bukkit.Location
 import org.bukkit.entity.Player
 
 @Entry("stacked_entity_definition", "A stacking of entities", Colors.ORANGE, "ic:baseline-stacked-bar-chart")
@@ -51,15 +51,18 @@ class StackedEntity(
 
     override fun applyProperties(properties: List<EntityProperty>) {
         if (entities.isEmpty()) return
-        entities.forEach { it.consumeProperties(properties) }
+        val otherProperties = properties.filter { it !is LocationProperty }
+        // Only the bottom entity will have the location
+        entities.first().consumeProperties(properties)
+        entities.asSequence().drop(1).forEach { it.consumeProperties(otherProperties) }
     }
 
-    override fun spawn(location: Location) {
-        var lastEntity: FakeEntity? = null
+    override fun spawn(location: LocationProperty) {
+        if (entities.isEmpty()) return
+        val baseEntity = entities.first()
         for (entity in entities) {
             entity.spawn(location)
-            lastEntity?.addPassenger(entity)
-            lastEntity = entity
+            baseEntity.addPassenger(entity)
         }
     }
 
@@ -69,9 +72,14 @@ class StackedEntity(
     }
 
     override fun addPassenger(entity: FakeEntity) {
-        // Add the passenger to the top entity.
-        entities.lastOrNull()?.addPassenger(entity)
+        entities.firstOrNull()?.addPassenger(entity)
     }
+
+    override fun removePassenger(entity: FakeEntity) {
+        entities.firstOrNull()?.removePassenger(entity)
+    }
+
+    override fun contains(entityId: Int): Boolean = entities.any { it.contains(entityId) }
 
     override fun dispose() {
         entities.forEach { it.dispose() }

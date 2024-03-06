@@ -3,6 +3,7 @@ import "package:riverpod_annotation/riverpod_annotation.dart";
 import "package:typewriter/models/adapter.dart";
 import "package:typewriter/utils/extensions.dart";
 import "package:typewriter/widgets/inspector/editors/boolean.dart";
+import "package:typewriter/widgets/inspector/editors/color.dart";
 import "package:typewriter/widgets/inspector/editors/cron.dart";
 import "package:typewriter/widgets/inspector/editors/duration.dart";
 import "package:typewriter/widgets/inspector/editors/entry_selector.dart";
@@ -17,9 +18,11 @@ import "package:typewriter/widgets/inspector/editors/object.dart";
 import "package:typewriter/widgets/inspector/editors/optional.dart";
 import "package:typewriter/widgets/inspector/editors/page_selector.dart";
 import "package:typewriter/widgets/inspector/editors/potion_effect.dart";
+import "package:typewriter/widgets/inspector/editors/skin.dart";
 import "package:typewriter/widgets/inspector/editors/sound_id.dart";
 import "package:typewriter/widgets/inspector/editors/sound_source.dart";
 import "package:typewriter/widgets/inspector/editors/string.dart";
+import "package:typewriter/widgets/inspector/editors/vector.dart";
 import "package:typewriter/widgets/inspector/inspector.dart";
 
 part "editors.g.dart";
@@ -40,12 +43,15 @@ List<EditorFilter> editorFilters(EditorFiltersRef ref) => [
       MaterialEditorFilter(),
       OptionalEditorFilter(),
       LocationEditorFilter(),
+      VectorEditorFilter(),
       DurationEditorFilter(),
       CronEditorFilter(),
       PotionEffectEditorFilter(),
       ItemEditorFilter(),
       SoundIdEditorFilter(),
       SoundSourceEditorFilter(),
+      SkinEditorFilter(),
+      ColorEditorFilter(),
 
       // Default filters
       StringEditorFilter(),

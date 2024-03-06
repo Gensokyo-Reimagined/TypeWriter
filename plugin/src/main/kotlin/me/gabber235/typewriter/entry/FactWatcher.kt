@@ -1,5 +1,6 @@
 package me.gabber235.typewriter.entry
 
+import io.ktor.util.collections.*
 import me.gabber235.typewriter.entry.entries.EventTrigger
 import me.gabber235.typewriter.entry.entries.ReadableFactEntry
 import me.gabber235.typewriter.interaction.InteractionHandler
@@ -11,8 +12,8 @@ import java.util.concurrent.ConcurrentHashMap
 class FactWatcher(
     private val player: Player,
 ) {
-    private val factWatch = ConcurrentHashMap<Ref<ReadableFactEntry>, Pair<Int,String>>()
-    private val listeners = mutableListOf<FactListener>()
+    private val factWatch = ConcurrentHashMap<Ref<ReadableFactEntry>, Int>()
+    private val listeners = ConcurrentSet<FactListener>()
 
     fun tick() {
         refresh()

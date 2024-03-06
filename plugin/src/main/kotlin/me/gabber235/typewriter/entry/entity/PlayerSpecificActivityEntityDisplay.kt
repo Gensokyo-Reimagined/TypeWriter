@@ -5,29 +5,31 @@ import me.gabber235.typewriter.entry.entries.AudienceFilter
 import me.gabber235.typewriter.entry.entries.AudienceFilterEntry
 import me.gabber235.typewriter.entry.entries.PropertySupplier
 import me.gabber235.typewriter.entry.entries.TickableDisplay
+import org.bukkit.Location
 import org.bukkit.entity.Player
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
 class PlayerSpecificActivityEntityDisplay(
     ref: Ref<out AudienceFilterEntry>,
-    private val creator: EntityCreator,
+    override val creator: EntityCreator,
     private val activityCreators: List<ActivityCreator>,
     private val suppliers: List<Pair<PropertySupplier<*>, Int>>,
-) : AudienceFilter(ref), TickableDisplay {
+    private val spawnLocation: Location,
+) : AudienceFilter(ref), TickableDisplay, ActivityEntityDisplay {
     private val activityManagers = ConcurrentHashMap<UUID, ActivityManager>()
     private val entities = ConcurrentHashMap<UUID, DisplayEntity>()
 
     override fun filter(player: Player): Boolean {
         val activityManager = activityManagers[player.uniqueId] ?: return false
         val npcLocation = activityManager.location
-        if (player.location.world.uid != npcLocation.world.uid) return false
-        return player.location.distanceSquared(npcLocation) <= entityShowRange * entityShowRange
+        val distance = npcLocation.distanceSquared(player.location) ?: return false
+        return distance <= entityShowRange * entityShowRange
     }
 
     override fun onPlayerAdd(player: Player) {
         activityManagers.computeIfAbsent(player.uniqueId) {
-            ActivityManager(activityCreators.map { it.create(player) })
+            ActivityManager(activityCreators.map { it.create(player) }, spawnLocation)
         }
         super.onPlayerAdd(player)
     }
@@ -63,5 +65,9 @@ class PlayerSpecificActivityEntityDisplay(
         entities.clear()
         activityManagers.values.forEach { it.dispose() }
         activityManagers.clear()
+    }
+
+    override fun playerHasEntity(playerId: UUID, entityId: Int): Boolean {
+        return entities[playerId]?.contains(entityId) ?: false
     }
 }
