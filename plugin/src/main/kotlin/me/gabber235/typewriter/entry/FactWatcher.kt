@@ -12,7 +12,7 @@ import java.util.concurrent.ConcurrentHashMap
 class FactWatcher(
     private val player: Player,
 ) {
-    private val factWatch = ConcurrentHashMap<Ref<ReadableFactEntry>, Int>()
+    private val factWatch = ConcurrentHashMap<Ref<ReadableFactEntry>, Pair<Int,String>>()
     private val listeners = ConcurrentSet<FactListener>()
 
     fun tick() {
