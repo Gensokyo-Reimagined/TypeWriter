@@ -10,7 +10,7 @@ import me.gabber235.typewriter.entry.emptyRef
 import me.gabber235.typewriter.entry.entries.CinematicAction
 import org.bukkit.entity.Player
 
-@Deprecated("Use the EntityAdapter instead")
+//@Deprecated("Use the EntityAdapter instead")
 @Entry(
     "reference_npc_cinematic",
     "A reference to an existing npc specifically for cinematic",

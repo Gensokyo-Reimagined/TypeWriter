@@ -1,6 +1,10 @@
 package me.gabber235.typewriter.citizens.entries.cinematic
 
+import com.ticxo.modelengine.api.utils.data.io.SavedData
+import com.ticxo.modelengine.core.citizens.ModelTrait
+import it.unimi.dsi.fastutil.Pair
 import me.gabber235.typewriter.capture.capturers.ArmSwing
+import me.gabber235.typewriter.citizens.CitizensAdapter.temporaryNpcMap
 import me.gabber235.typewriter.citizens.CitizensAdapter.temporaryRegistry
 import me.gabber235.typewriter.utils.ThreadType
 import net.citizensnpcs.api.CitizensAPI
@@ -9,6 +13,8 @@ import net.citizensnpcs.api.trait.trait.Equipment
 import net.citizensnpcs.api.trait.trait.Equipment.EquipmentSlot.*
 import net.citizensnpcs.api.trait.trait.MobType
 import net.citizensnpcs.api.trait.trait.PlayerFilter
+import net.citizensnpcs.api.util.DataKey
+import net.citizensnpcs.api.util.MemoryDataKey
 import net.citizensnpcs.trait.HologramTrait
 import net.citizensnpcs.trait.SkinTrait
 import net.citizensnpcs.trait.SneakTrait
@@ -93,6 +99,18 @@ data class ReferenceNpcData(val id: Int) : CitizensNpcData {
 
         val type = original.getOrAddTrait(MobType::class.java).type
         val npc = temporaryRegistry.createNPC(type, original.name)
+        temporaryNpcMap.put(Pair.of(player.uniqueId,id),npc.id);
+        npc.getOrAddTrait(ModelTrait::class.java)
+        if(original.hasTrait(ModelTrait::class.java)){
+            val originalModelTrait : ModelTrait = original.getTraitNullable(ModelTrait::class.java)
+            val modeledEntity = originalModelTrait.modeledEntity;
+            npc.getOrAddTrait(ModelTrait::class.java)
+            modeledEntity?.save()?.ifPresent { data: SavedData ->
+                val key: DataKey = MemoryDataKey();
+                key.setString("model_data",data.toString());
+                npc.getOrAddTrait(ModelTrait::class.java).load(key);
+            }
+        }
 
         if (original.hasTrait(SkinTrait::class.java)) {
             val originalSkin = original.getOrAddTrait(SkinTrait::class.java)
@@ -140,11 +158,15 @@ data class ReferenceNpcData(val id: Int) : CitizensNpcData {
     }
 
     override fun teardown(player: Player, npc: NPC) {
+        if(npc.hasTrait(ModelTrait::class.java)){
+            npc.getTraitNullable(ModelTrait::class.java).onDespawn()
+        }
         super.teardown(player, npc)
 
         val original =
             CitizensAPI.getNPCRegistry().getById(id) ?: throw IllegalArgumentException("NPC with id $id not found.")
         val filter = original.getOrAddTrait(PlayerFilter::class.java)
+        temporaryNpcMap.inverse().remove(npc.id);
         if (filter.isAllowlist) {
             filter.addPlayer(player.uniqueId)
         } else {

@@ -16,7 +16,7 @@ import org.bukkit.Location
 import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.PlayerInventory
 
-@Deprecated("Use the EntityAdapter instead")
+//@Deprecated("Use the EntityAdapter instead")
 @Entry("npc_movement_artifact", "Movement data for an npc", Colors.PINK, "fa6-solid:person-walking")
 @Tags("npc_movement_artifact")
 /**

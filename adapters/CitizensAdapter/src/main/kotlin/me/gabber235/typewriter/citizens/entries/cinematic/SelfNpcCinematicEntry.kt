@@ -6,7 +6,7 @@ import me.gabber235.typewriter.entry.Criteria
 import me.gabber235.typewriter.entry.entries.CinematicAction
 import org.bukkit.entity.Player
 
-@Deprecated("Use the EntityAdapter instead")
+//@Deprecated("Use the EntityAdapter instead")
 @Entry("self_npc_cinematic", "The player itself as an cinematic npc", Colors.PINK, "heroicons:user-16-solid")
 /**
  * The `Self NPC Cinematic` entry that plays a recorded animation back on the player with an NPC with the player's skin.
